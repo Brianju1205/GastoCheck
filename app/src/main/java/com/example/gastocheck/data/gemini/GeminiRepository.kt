@@ -5,11 +5,12 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import javax.inject.Inject
 
+// 1. ACTUALIZAMOS LA ESTRUCTURA DE DATOS
+// Ahora incluye cuentas para soportar transferencias y lógica avanzada
 
 class GeminiRepository @Inject constructor() {
 
-
-    private val apiKey = "AIzaSyDdWq_ThblXwWLz7Gv4U-imbmfxvvHvJ-g"
+    private val apiKey = "AIzaSyDdWq_ThblXwWLz7Gv4U-imbmfxvvHvJ-g" // Tu API Key
 
     private val api = Retrofit.Builder()
         .baseUrl("https://generativelanguage.googleapis.com/")
@@ -18,26 +19,43 @@ class GeminiRepository @Inject constructor() {
         .create(GeminiApi::class.java)
 
     suspend fun interpretarTexto(texto: String): TransaccionInterpretada? {
-        // Instrucciones para la IA
+        // 2. PROMPT AVANZADO (Ingeniería de Prompts)
         val prompt = """
-            Analiza el siguiente texto financiero: "$texto".
-            Tu trabajo es extraer la información estructurada.
+            Eres un asistente financiero experto. Analiza el texto: "$texto".
             
-            Reglas:
-            1. Identifica si es "GASTO", "INGRESO" o "META".
-            2. Extrae el monto numérico (ej. 500).
-            3. Asigna una categoría corta (ej. Comida, Transporte, Salud, Ropa, Ocio).
-            4. Genera una descripción corta (máx 5 palabras).
+            Tu objetivo es extraer datos estructurados para una App de finanzas.
             
-            Responde SOLO con este formato JSON exacto:
+            REGLAS DE ANÁLISIS:
+            1. **Tipo**: 
+               - Si dice "transferir", "pasar", "mover", "enviar" -> "TRANSFERENCIA".
+               - Si dice "ahorrar", "meta", "guardar para" -> "META".
+               - Si implica entrada de dinero ("gané", "recibí", "depósito") -> "INGRESO".
+               - Cualquier otra salida de dinero -> "GASTO".
+            
+            2. **Cuentas (Origen y Destino)**:
+               - Busca nombres de cuentas como: "Banco", "Tarjeta", "Nomina", "Ahorros", "BBVA", "Santander".
+               - Regla de Oro: Si NO se menciona ninguna cuenta, asume "Efectivo".
+               - Si es GASTO: 'cuenta_origen' es la cuenta usada.
+               - Si es INGRESO: 'cuenta_origen' es donde entra el dinero.
+               - Si es TRANSFERENCIA: Identifica 'cuenta_origen' (desde) y 'cuenta_destino' (hacia).
+            
+            3. **Monto**: Extrae el número. Si hay varios, usa el que parezca el total.
+            
+            4. **Categoría**: Clasifica en una sola palabra (ej. Comida, Transporte, Salud, Ocio, Servicios, Casa).
+            
+            5. **Descripción**: Resumen muy breve (máx 5 palabras).
+
+            Responde ÚNICAMENTE con este JSON:
             {
               "tipo": "GASTO", 
               "monto": 0.0,
-              "categoria": "General",
-              "descripcion": "Descripción corta"
+              "categoria": "Otros",
+              "descripcion": "Texto breve",
+              "cuenta_origen": "Efectivo",
+              "cuenta_destino": null
             }
         """.trimIndent()
-        
+
         val request = GeminiRequest(listOf(Content(listOf(Part(prompt)))))
 
         return try {
@@ -45,7 +63,6 @@ class GeminiRepository @Inject constructor() {
             val jsonString = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
 
             if (jsonString != null) {
-                // Limpiamos el JSON por si la IA añade bloques de código markdown
                 val jsonLimpio = jsonString.replace("```json", "").replace("```", "").trim()
                 Gson().fromJson(jsonLimpio, TransaccionInterpretada::class.java)
             } else {
@@ -56,5 +73,4 @@ class GeminiRepository @Inject constructor() {
             null
         }
     }
-
 }

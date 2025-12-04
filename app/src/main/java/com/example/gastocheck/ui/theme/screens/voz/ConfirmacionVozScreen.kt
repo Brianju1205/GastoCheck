@@ -30,73 +30,177 @@ fun ConfirmacionVozScreen(
     onConfirmar: () -> Unit,
     onCancelar: () -> Unit
 ) {
-    // IMPORTANTE: Procesamos el texto al entrar
-    LaunchedEffect(Unit) {
+
+    /**
+     * Procesamos el texto de voz UNA SOLA VEZ al iniciar.
+     * Esto evita que el texto se procese dos veces por recomposición.
+     */
+    LaunchedEffect(key1 = textoDetectado) {
         if (textoDetectado.isNotEmpty()) {
             viewModel.procesarVoz(textoDetectado)
         }
     }
 
+    // Estados provenientes del ViewModel
     val monto by viewModel.monto.collectAsState()
     val descripcion by viewModel.descripcion.collectAsState()
     val esIngreso by viewModel.esIngreso.collectAsState()
     val categoria by viewModel.categoria.collectAsState()
     val esMeta by viewModel.esMeta.collectAsState()
 
+    // ⭐ Preparado para cuando agregues cuentas detectadas por voz
+    // val cuentaDetectada by viewModel.cuentaDetectada.collectAsState()
+
     val colorTema = when {
-        esMeta -> Color(0xFFFFD700)
+        esMeta -> Color(0xFFFFD700) // dorado meta
         esIngreso -> MaterialTheme.colorScheme.primary
         else -> MaterialTheme.colorScheme.error
     }
+
     val textoTipo = when {
         esMeta -> "Meta Detectada"
         esIngreso -> "Ingreso Detectado"
         else -> "Gasto Detectado"
     }
-    val iconoCategoria = if (esMeta) Icons.Default.Star else CategoriaUtils.getIcono(categoria)
+
+    val iconoCategoria = if (esMeta) {
+        Icons.Default.Star
+    } else {
+        CategoriaUtils.getIcono(categoria)
+    }
 
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
+
         Column(
-            modifier = Modifier.padding(padding).fillMaxSize().padding(24.dp),
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text("Confirmar Registro", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+
+            Text(
+                "Confirmar Registro",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+
             Spacer(modifier = Modifier.height(32.dp))
 
+            // --- TARJETA DE CONFIRMACIÓN ---
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                 shape = RoundedCornerShape(24.dp),
                 modifier = Modifier.fillMaxWidth(),
                 elevation = CardDefaults.cardElevation(8.dp)
             ) {
-                Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(modifier = Modifier.size(80.dp).clip(CircleShape).background(colorTema.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) {
-                        Icon(imageVector = iconoCategoria, contentDescription = null, tint = colorTema, modifier = Modifier.size(40.dp))
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+
+                    // Icono principal
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(CircleShape)
+                            .background(colorTema.copy(alpha = 0.2f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = iconoCategoria,
+                            contentDescription = null,
+                            tint = colorTema,
+                            modifier = Modifier.size(40.dp)
+                        )
                     }
+
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text(text = textoTipo, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(text = "$$monto", fontSize = 56.sp, fontWeight = FontWeight.ExtraBold, color = colorTema)
+
+                    Text(
+                        text = textoTipo,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Text(
+                        text = "$$monto",
+                        fontSize = 56.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = colorTema
+                    )
+
                     Spacer(modifier = Modifier.height(16.dp))
+
                     Divider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f))
+
                     Spacer(modifier = Modifier.height(16.dp))
+
+                    // Categoría
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Categoría: ", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(categoria, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        Text(
+                            categoria,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
                     }
+
                     Spacer(modifier = Modifier.height(4.dp))
+
+                    // Nota
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Nota: ", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(text = descripcion.ifEmpty { "-" }, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+                        Text(
+                            text = descripcion.ifEmpty { "-" },
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1
+                        )
                     }
                 }
             }
+
             Spacer(modifier = Modifier.height(24.dp))
-            Text(text = "Escuché: \"$textoDetectado\"", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, textAlign = TextAlign.Center)
+
+            // TEXTO RECONOCIDO
+            Text(
+                text = "Escuché: \"$textoDetectado\"",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+
             Spacer(modifier = Modifier.weight(1f))
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(onClick = onCancelar, modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onBackground)) { Text("Cancelar") }
-                Button(onClick = { viewModel.guardarTransaccion { onConfirmar() } }, modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = colorTema)) { Icon(Icons.Default.Check, null); Spacer(Modifier.width(8.dp)); Text("Guardar") }
+
+            // BOTONES
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedButton(
+                    onClick = onCancelar,
+                    modifier = Modifier.weight(1f).height(56.dp)
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Cancelar")
+                }
+
+                Button(
+                    onClick = {
+                        viewModel.guardarTransaccion { onConfirmar() }
+                    },
+                    modifier = Modifier.weight(1f).height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = colorTema)
+                ) {
+                    Icon(Icons.Default.Check, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Guardar")
+                }
             }
         }
     }

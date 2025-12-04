@@ -11,17 +11,20 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface TransaccionDao {
 
-    // Leer todas las transacciones ordenadas por fecha (más recientes primero)
+    // Obtener TODAS (Para el resumen global)
     @Query("SELECT * FROM transacciones ORDER BY fecha DESC")
-    fun getTransacciones(): Flow<List<TransaccionEntity>>
+    fun getAllTransacciones(): Flow<List<TransaccionEntity>>
 
-    // Guardar una transacción (si ya existe ID, la reemplaza)
+    // Obtener POR CUENTA (Para el detalle)
+    @Query("SELECT * FROM transacciones WHERE cuentaId = :cuentaId ORDER BY fecha DESC")
+    fun getTransaccionesByCuenta(cuentaId: Int): Flow<List<TransaccionEntity>>
+
     @Query("SELECT * FROM transacciones WHERE id = :id")
     suspend fun getTransaccionById(id: Int): TransaccionEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTransaccion(transaccion: TransaccionEntity)
 
-    // Borrar una transacción
     @Delete
     suspend fun deleteTransaccion(transaccion: TransaccionEntity)
 }

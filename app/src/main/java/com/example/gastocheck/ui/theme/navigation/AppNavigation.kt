@@ -1,16 +1,22 @@
 package com.example.gastocheck.ui.theme.navigation
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
 import com.example.gastocheck.ui.theme.screens.agregar.AgregarScreen
+import com.example.gastocheck.ui.theme.screens.agregar.AgregarViewModel
+import com.example.gastocheck.ui.theme.screens.cuentas.*
 import com.example.gastocheck.ui.theme.screens.home.HomeScreen
 import com.example.gastocheck.ui.theme.screens.metas.MetasScreen
 import com.example.gastocheck.ui.theme.screens.voz.ConfirmacionVozScreen
@@ -21,32 +27,73 @@ fun AppNavigation() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
+    // --- INSTANCIA COMPARTIDA DEL VIEWMODEL ---
+    // Esto asegura que los datos cargados por voz en Home estén disponibles en AgregarScreen
+    val sharedAgregarViewModel: AgregarViewModel = hiltViewModel()
+
+    val rutasConBarra = listOf("home", "cuentas_lista", "metas")
+    val showBars = currentRoute in rutasConBarra
+
     Scaffold(
         bottomBar = {
-            if (currentRoute?.startsWith("home") == true || currentRoute == "metas") {
+            if (showBars) {
                 NavigationBar {
-                    NavigationBarItem(icon = { Icon(Icons.Default.Home, null) }, label = { Text("Inicio") }, selected = currentRoute?.startsWith("home") == true, onClick = { navController.navigate("home") { popUpTo("home") { saveState = true }; launchSingleTop = true; restoreState = true } })
-                    NavigationBarItem(icon = { Icon(Icons.Default.Star, null) }, label = { Text("Metas") }, selected = currentRoute == "metas", onClick = { navController.navigate("metas") { popUpTo("home") { saveState = true }; launchSingleTop = true; restoreState = true } })
+                    NavigationBarItem(icon = { Icon(Icons.Default.Home, null) }, label = { Text("Inicio") }, selected = currentRoute == "home", onClick = { navController.navigate("home") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } })
+                    NavigationBarItem(icon = { Icon(Icons.Default.AccountBalance, null) }, label = { Text("Cuentas") }, selected = currentRoute == "cuentas_lista", onClick = { navController.navigate("cuentas_lista") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } })
+                    NavigationBarItem(icon = { Icon(Icons.Default.Star, null) }, label = { Text("Metas") }, selected = currentRoute == "metas", onClick = { navController.navigate("metas") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } })
                 }
             }
         }
     ) { innerPadding ->
         NavHost(navController = navController, startDestination = "home", modifier = Modifier.padding(innerPadding)) {
+
             composable("home") {
                 HomeScreen(
-                    onNavegarAgregar = { es -> navController.navigate("agregar?esIngreso=$es") },
-                    onNavegarEditar = { id -> navController.navigate("agregar?id=$id") },
+                    // Pasamos el ViewModel compartido
+                    agregarViewModel = sharedAgregarViewModel,
+                    onNavegarAgregar = { esIngreso ->
+                        // Navegación manual: NO viene de voz
+                        navController.navigate("agregar?id=-1&esIngreso=$esIngreso&vieneDeVoz=false")
+                    },
+                    onNavegarEditar = { id ->
+                        navController.navigate("agregar?id=$id&vieneDeVoz=false")
+                    },
                     onNavegarMetas = { navController.navigate("metas") },
-                    onVozDetectada = { txt -> navController.navigate("confirmacion_voz?texto=$txt") }
+                    onVozDetectada = { esIngresoDetectado ->
+                        // Navegación por voz: SI viene de voz
+                        navController.navigate("agregar?id=-1&esIngreso=$esIngresoDetectado&vieneDeVoz=true")
+                    }
                 )
             }
+
             composable("metas") { MetasScreen() }
-            composable("agregar?id={id}&esIngreso={esIngreso}", arguments = listOf(navArgument("id") { type = NavType.IntType; defaultValue = -1 }, navArgument("esIngreso") { type = NavType.BoolType; defaultValue = false })) {
-                AgregarScreen(alRegresar = { navController.popBackStack() })
-            }
-            composable("confirmacion_voz?texto={texto}", arguments = listOf(navArgument("texto") { type = NavType.StringType; defaultValue = "" })) { backStackEntry ->
-                val texto = backStackEntry.arguments?.getString("texto") ?: ""
-                ConfirmacionVozScreen(textoDetectado = texto, onConfirmar = { navController.popBackStack("home", inclusive = false) }, onCancelar = { navController.popBackStack() })
+            composable("cuentas_lista") { CuentasListaScreen(onNavegarDetalle = { navController.navigate("detalle_cuenta/$it") }, onNavegarCrear = { navController.navigate("crear_cuenta") }) }
+            composable("crear_cuenta") { CrearCuentaScreen(onBack = { navController.popBackStack() }) }
+            composable("detalle_cuenta/{accountId}", arguments = listOf(navArgument("accountId") { type = NavType.IntType })) { backStackEntry -> DetalleCuentaScreen(accountId = backStackEntry.arguments?.getInt("accountId") ?: -1, onBack = { navController.popBackStack() }) }
+
+            // --- RUTA AGREGAR CONFIGURADA ---
+            composable(
+                route = "agregar?id={id}&esIngreso={esIngreso}&vieneDeVoz={vieneDeVoz}",
+                arguments = listOf(
+                    navArgument("id") { type = NavType.IntType; defaultValue = -1 },
+                    navArgument("esIngreso") { type = NavType.BoolType; defaultValue = false },
+                    navArgument("vieneDeVoz") { type = NavType.BoolType; defaultValue = false }
+                )
+            ) { backStackEntry ->
+                val id = backStackEntry.arguments?.getInt("id") ?: -1
+                val esIngreso = backStackEntry.arguments?.getBoolean("esIngreso") ?: false
+                val vieneDeVoz = backStackEntry.arguments?.getBoolean("vieneDeVoz") ?: false
+
+                // Llamamos a inicializar en el ViewModel compartido
+                // Si vieneDeVoz es true, NO borrará los datos que acaba de cargar la IA.
+                LaunchedEffect(Unit) {
+                    sharedAgregarViewModel.inicializar(id, esIngreso, vieneDeVoz)
+                }
+
+                AgregarScreen(
+                    viewModel = sharedAgregarViewModel,
+                    alRegresar = { navController.popBackStack() }
+                )
             }
         }
     }
