@@ -20,7 +20,6 @@ class TransaccionRepositoryImpl @Inject constructor(
     override fun getTransaccionesPorCuenta(cuentaId: Int) = transaccionDao.getTransaccionesByCuenta(cuentaId)
     override fun getCuentas() = cuentaDao.getCuentas()
 
-    // --- NUEVO ---
     override fun getCuentaByIdFlow(id: Int): Flow<CuentaEntity?> = cuentaDao.getCuentaByIdFlow(id)
 
     override suspend fun getTransaccionById(id: Int) = transaccionDao.getTransaccionById(id)
@@ -36,22 +35,26 @@ class TransaccionRepositoryImpl @Inject constructor(
             val cuentaDestino = cuentaDao.getCuentaById(destinoId)
 
             if (cuentaOrigen != null && cuentaDestino != null) {
-                // 1. Salida de origen
+                // 1. Salida de origen (Gasto)
                 val salida = TransaccionEntity(
                     monto = monto,
                     categoria = "Transferencia",
-                    descripcion = "Transferencia a ${cuentaDestino.nombre}",
+                    // CORRECCIÓN: Usamos notaCompleta y notaResumen en lugar de descripcion
+                    notaCompleta = "Transferencia a ${cuentaDestino.nombre}",
+                    notaResumen = "Transferencia Enviada",
                     fecha = fecha,
                     esIngreso = false,
                     cuentaId = origenId
                 )
                 transaccionDao.insertTransaccion(salida)
 
-                // 2. Entrada a destino
+                // 2. Entrada a destino (Ingreso)
                 val entrada = TransaccionEntity(
                     monto = monto,
                     categoria = "Transferencia",
-                    descripcion = "Recibido de ${cuentaOrigen.nombre}",
+                    // CORRECCIÓN: Ajustamos los campos aquí también
+                    notaCompleta = "Recibido de ${cuentaOrigen.nombre}",
+                    notaResumen = "Transferencia Recibida",
                     fecha = fecha,
                     esIngreso = true,
                     cuentaId = destinoId

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Star
@@ -16,6 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -33,7 +35,6 @@ fun ConfirmacionVozScreen(
 
     /**
      * Procesamos el texto de voz UNA SOLA VEZ al iniciar.
-     * Esto evita que el texto se procese dos veces por recomposición.
      */
     LaunchedEffect(key1 = textoDetectado) {
         if (textoDetectado.isNotEmpty()) {
@@ -48,11 +49,16 @@ fun ConfirmacionVozScreen(
     val categoria by viewModel.categoria.collectAsState()
     val esMeta by viewModel.esMeta.collectAsState()
 
-    // ⭐ Preparado para cuando agregues cuentas detectadas por voz
-    // val cuentaDetectada by viewModel.cuentaDetectada.collectAsState()
+    // --- DETECCIÓN DE CUENTA ---
+    val cuentas by viewModel.cuentas.collectAsState()
+    val cuentaId by viewModel.cuentaIdSeleccionada.collectAsState()
+
+    val nombreCuenta = remember(cuentas, cuentaId) {
+        cuentas.find { it.id == cuentaId }?.nombre ?: "Efectivo"
+    }
 
     val colorTema = when {
-        esMeta -> Color(0xFFFFD700) // dorado meta
+        esMeta -> Color(0xFFFFD700)
         esIngreso -> MaterialTheme.colorScheme.primary
         else -> MaterialTheme.colorScheme.error
     }
@@ -100,7 +106,7 @@ fun ConfirmacionVozScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
 
-                    // Icono principal
+                    // Icono principal circular
                     Box(
                         modifier = Modifier
                             .size(80.dp)
@@ -137,9 +143,9 @@ fun ConfirmacionVozScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Categoría
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Categoría: ", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    // 1. Categoría
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Text("Categoría:", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(80.dp))
                         Text(
                             categoria,
                             fontWeight = FontWeight.Bold,
@@ -147,16 +153,33 @@ fun ConfirmacionVozScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    // Nota
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Nota: ", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    // 2. Cuenta
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Text("Cuenta:", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(80.dp))
+                        Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            nombreCuenta,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // 3. Nota (CORREGIDO AQUÍ)
+                    // Usamos verticalAlignment = Alignment.Top para que si el texto es largo, la etiqueta "Nota:" se quede arriba
+                    Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth()) {
+                        Text("Nota:", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(80.dp))
                         Text(
                             text = descripcion.ifEmpty { "-" },
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1
+                            maxLines = 4,
+                            overflow = TextOverflow.Ellipsis,
+                            lineHeight = 20.sp
                         )
                     }
                 }
@@ -164,7 +187,6 @@ fun ConfirmacionVozScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // TEXTO RECONOCIDO
             Text(
                 text = "Escuché: \"$textoDetectado\"",
                 style = MaterialTheme.typography.bodySmall,
@@ -176,7 +198,6 @@ fun ConfirmacionVozScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // BOTONES
             Row(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.fillMaxWidth()

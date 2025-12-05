@@ -1,6 +1,5 @@
 package com.example.gastocheck.ui.theme.screens.home
 
-
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gastocheck.data.database.dao.MetaDao
@@ -23,13 +22,16 @@ class HomeViewModel @Inject constructor(
     private val _cuentaSeleccionadaId = MutableStateFlow(-1)
     val cuentaSeleccionadaId = _cuentaSeleccionadaId.asStateFlow()
 
+    // Flujo de cuentas disponibles
     val cuentas: StateFlow<List<CuentaEntity>> = repository.getCuentas()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // Flujo de metas de ahorro
     val metas: StateFlow<List<MetaEntity>> = metaDao.getMetas()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Transacciones reactivas al filtro
+    // Transacciones filtradas reactivamente
+    // Si cambia el filtro (_cuentaSeleccionadaId), se recargan las transacciones automáticamente
     val transacciones: StateFlow<List<TransaccionEntity>> = _cuentaSeleccionadaId
         .flatMapLatest { id ->
             if (id == -1) repository.getTransaccionesGlobales()
@@ -37,16 +39,17 @@ class HomeViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Saldo calculado dinámicamente
+    // Saldo Total Calculado Dinámicamente
+    // Combina: Lista de Transacciones + Lista de Cuentas + Filtro Actual
     val saldoTotal: StateFlow<Double> = combine(transacciones, cuentas, _cuentaSeleccionadaId) { trs, cts, filtroId ->
         if (filtroId == -1) {
-            // Saldo Global = Suma de saldos iniciales + Ingresos - Gastos
+            // Caso GLOBAL: Suma de saldos iniciales de TODAS las cuentas + Ingresos - Gastos
             val saldoInicialTotal = cts.sumOf { it.saldoInicial }
             val ingresos = trs.filter { it.esIngreso }.sumOf { it.monto }
             val gastos = trs.filter { !it.esIngreso }.sumOf { it.monto }
             saldoInicialTotal + ingresos - gastos
         } else {
-            // Saldo Cuenta Específica
+            // Caso CUENTA ESPECÍFICA: Saldo inicial de ESA cuenta + Sus Ingresos - Sus Gastos
             val cuenta = cts.find { it.id == filtroId }
             val inicial = cuenta?.saldoInicial ?: 0.0
             val ingresos = trs.filter { it.esIngreso }.sumOf { it.monto }
@@ -54,6 +57,8 @@ class HomeViewModel @Inject constructor(
             inicial + ingresos - gastos
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+
+    // --- ACCIONES ---
 
     fun cambiarFiltroCuenta(id: Int) {
         _cuentaSeleccionadaId.value = id
@@ -66,7 +71,7 @@ class HomeViewModel @Inject constructor(
     }
 
     fun borrarCuenta(cuenta: CuentaEntity) {
-        // Lógica para borrar cuenta (podría requerir confirmar borrado en cascada)
-        // Por ahora omitido para brevedad
+        // Aquí iría la lógica para borrar cuenta
+        // viewModelScope.launch { repository.deleteCuenta(cuenta) }
     }
 }

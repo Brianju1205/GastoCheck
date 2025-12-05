@@ -33,32 +33,28 @@ object AppModule {
             AppDatabase::class.java,
             "gastos_database"
         )
-            // 1. ELIMINAMOS .addMigrations(...) para que no intente migrar manualmente.
-
-            // 2. ACTIVAMOS MIGRACIÓN DESTRUCTIVA
-            // Si cambias la versión en AppDatabase.kt, borrará la BD y la creará de cero.
+            // 1. IMPORTANTE: Permite a Room destruir la BD vieja si cambia la versión
+            // Esto soluciona el crash cuando cambias columnas o tablas
             .fallbackToDestructiveMigration()
 
-            // 3. CALLBACK DE SEGURIDAD (CRÍTICO)
-            // Esto asegura que siempre exista la cuenta "Efectivo" (ID 1)
-            // para que no explote la app al guardar un gasto.
+            // 2. CALLBACK: Inserta datos iniciales obligatorios
             .addCallback(object : RoomDatabase.Callback() {
-                // Se ejecuta cuando se crea la base de datos desde cero (instalación nueva o tras migración destructiva)
                 override fun onCreate(db: SupportSQLiteDatabase) {
                     super.onCreate(db)
                     insertarCuentaPorDefecto(db)
                 }
 
-                // Se ejecuta cada vez que se abre la app (por si acaso la cuenta se borró)
                 override fun onOpen(db: SupportSQLiteDatabase) {
                     super.onOpen(db)
+                    // Verificamos al abrir por si acaso se borró manualmente
                     insertarCuentaPorDefecto(db)
                 }
 
                 private fun insertarCuentaPorDefecto(db: SupportSQLiteDatabase) {
                     CoroutineScope(Dispatchers.IO).launch {
                         try {
-                            // SQL directo para mayor seguridad y velocidad
+                            // Insertamos la cuenta "Efectivo" (ID 1) si no existe.
+                            // Esto evita errores de Foreign Key al guardar transacciones.
                             db.execSQL("INSERT OR IGNORE INTO cuentas (id, nombre, tipo, saldoInicial, colorHex, esArchivada) VALUES (1, 'Efectivo', 'Efectivo', 0.0, '#00E676', 0)")
                         } catch (e: Exception) {
                             e.printStackTrace()
@@ -72,22 +68,21 @@ object AppModule {
     @Provides
     @Singleton
     fun provideCuentaDao(database: AppDatabase): CuentaDao {
-        return database.cuentaDao
+        return database.cuentaDao() // CORREGIDO: Se agregaron paréntesis ()
     }
 
     @Provides
     @Singleton
     fun provideTransaccionDao(database: AppDatabase): TransaccionDao {
-        return database.transaccionDao
+        return database.transaccionDao() // CORREGIDO: Se agregaron paréntesis ()
     }
 
     @Provides
     @Singleton
     fun provideMetaDao(database: AppDatabase): MetaDao {
-        return database.metaDao
+        return database.metaDao() // CORREGIDO: Se agregaron paréntesis ()
     }
 
-    // Repositorio actualizado para recibir los 2 DAOs y la DB
     @Provides
     @Singleton
     fun provideTransaccionRepository(

@@ -81,7 +81,7 @@ fun HomeScreen(
         if (isGranted) agregarViewModel.iniciarEscuchaInteligente()
     }
 
-    // --- CORRECCIÓN FINAL: NAVEGACIÓN INTELIGENTE ---
+    // NAVEGACIÓN INTELIGENTE
     LaunchedEffect(estadoVoz) {
         if (estadoVoz is EstadoVoz.Exito) {
             val exito = estadoVoz as EstadoVoz.Exito
@@ -99,8 +99,13 @@ fun HomeScreen(
 
     if (mostrarDetalle && transaccionSeleccionada != null) {
         val t = transaccionSeleccionada!!
+
+        // --- NUEVO: Buscamos el nombre de la cuenta para mostrarlo en el diálogo ---
+        val nombreCuenta = cuentas.find { it.id == t.cuentaId }?.nombre ?: "Cuenta desconocida"
+
         DetalleTransaccionDialog(
             transaccion = t,
+            nombreCuenta = nombreCuenta, // Pasamos el nombre aquí
             onDismiss = { mostrarDetalle = false },
             onDelete = { viewModel.borrarTransaccion(t); mostrarDetalle = false },
             onEdit = { mostrarDetalle = false; onNavegarEditar(t.id) }
@@ -285,7 +290,11 @@ fun ItemTransaccionModerno(transaccion: TransaccionEntity, onEdit: () -> Unit, o
         Row(modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { onItemClick() }, onLongClick = { mostrarMenu = true }).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) { Icon(imageVector = icono, contentDescription = null, tint = colorIcono, modifier = Modifier.size(24.dp)) }
             Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) { Text(text = transaccion.descripcion.ifEmpty { transaccion.categoria }, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium); Text(text = transaccion.categoria, style = MaterialTheme.typography.bodySmall) }
+            Column(modifier = Modifier.weight(1f)) {
+                // AQUÍ USAMOS LA NOTA RESUMEN
+                Text(text = transaccion.notaResumen.ifEmpty { transaccion.categoria }, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                Text(text = transaccion.categoria, style = MaterialTheme.typography.bodySmall)
+            }
             Text(text = "$signo${CurrencyUtils.formatCurrency(transaccion.monto)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = colorMonto)
         }
         DropdownMenu(expanded = mostrarMenu, onDismissRequest = { mostrarMenu = false }) {
@@ -296,9 +305,41 @@ fun ItemTransaccionModerno(transaccion: TransaccionEntity, onEdit: () -> Unit, o
 }
 
 @Composable
-fun DetalleTransaccionDialog(transaccion: TransaccionEntity, onDismiss: () -> Unit, onDelete: () -> Unit, onEdit: () -> Unit) {
-    AlertDialog(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface, icon = { Icon(CategoriaUtils.getIcono(transaccion.categoria), null, tint = CategoriaUtils.getColor(transaccion.categoria), modifier = Modifier.size(48.dp)) }, title = { Text(transaccion.categoria) }, text = { Column {
-        Text(CurrencyUtils.formatCurrency(transaccion.monto), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold); Spacer(Modifier.height(8.dp)); Text(transaccion.descripcion); Spacer(Modifier.height(4.dp)); Text(DateUtils.formatearFechaAmigable(transaccion.fecha), style = MaterialTheme.typography.bodySmall) } }, confirmButton = { TextButton(onClick = onEdit) { Text("Editar") } }, dismissButton = { Row { TextButton(onClick = onDelete) { Text("Eliminar") }; TextButton(onClick = onDismiss) { Text("Cerrar") } } })
+fun DetalleTransaccionDialog(
+    transaccion: TransaccionEntity,
+    nombreCuenta: String, // Recibimos el nombre de la cuenta
+    onDismiss: () -> Unit,
+    onDelete: () -> Unit,
+    onEdit: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        icon = { Icon(CategoriaUtils.getIcono(transaccion.categoria), null, tint = CategoriaUtils.getColor(transaccion.categoria), modifier = Modifier.size(48.dp)) },
+        title = { Text(transaccion.categoria) },
+        text = {
+            Column {
+                Text(CurrencyUtils.formatCurrency(transaccion.monto), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+
+                // --- NUEVO: Mostramos la cuenta ---
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(4.dp))
+                    Text(nombreCuenta, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // NOTA COMPLETA
+                Text(transaccion.notaCompleta.ifEmpty { "Sin nota" })
+                Spacer(Modifier.height(4.dp))
+                Text(DateUtils.formatearFechaAmigable(transaccion.fecha), style = MaterialTheme.typography.bodySmall)
+            }
+        },
+        confirmButton = { TextButton(onClick = onEdit) { Text("Editar") } },
+        dismissButton = { Row { TextButton(onClick = onDelete) { Text("Eliminar") }; TextButton(onClick = onDismiss) { Text("Cerrar") } } }
+    )
 }
 
 @Composable

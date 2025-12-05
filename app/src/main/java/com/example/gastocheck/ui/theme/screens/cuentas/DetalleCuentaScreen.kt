@@ -214,8 +214,10 @@ fun ItemMovimientoCuenta(
 
         // Texto
         Column(modifier = Modifier.weight(1f)) {
+            // CORRECCIÓN: Usamos t.notaResumen en lugar de t.descripcion
+            // Como fallback usamos la categoría si el resumen estuviera vacío
             Text(
-                text = t.descripcion.ifEmpty { t.categoria },
+                text = t.notaResumen.ifEmpty { t.categoria },
                 color = textColor,
                 fontWeight = FontWeight.Medium,
                 fontSize = 16.sp

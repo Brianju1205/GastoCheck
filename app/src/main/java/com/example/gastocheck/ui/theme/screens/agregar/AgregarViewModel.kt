@@ -9,6 +9,7 @@ import com.example.gastocheck.data.database.entity.TransaccionEntity
 import com.example.gastocheck.data.gemini.GeminiRepository
 import com.example.gastocheck.data.repository.TransaccionRepository
 import com.example.gastocheck.ui.theme.util.CategoriaUtils
+import com.example.gastocheck.ui.theme.util.NotaUtils
 import com.example.gastocheck.ui.theme.util.VoiceRecognizer
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -42,6 +43,7 @@ class AgregarViewModel @Inject constructor(
     private val _fecha = MutableStateFlow(Date())
     val fecha = _fecha.asStateFlow()
 
+    // CORRECCIÓN: Restauramos el estado 'esMeta' que faltaba y causaba el error
     private val _esMeta = MutableStateFlow(false)
     val esMeta = _esMeta.asStateFlow()
 
@@ -51,11 +53,6 @@ class AgregarViewModel @Inject constructor(
 
     private val _cuentaIdSeleccionada = MutableStateFlow(1)
     val cuentaIdSeleccionada = _cuentaIdSeleccionada.asStateFlow()
-
-    private val _esTransferencia = MutableStateFlow(false)
-    val esTransferencia = _esTransferencia.asStateFlow()
-    private val _cuentaDestinoId = MutableStateFlow<Int?>(null)
-    val cuentaDestinoId = _cuentaDestinoId.asStateFlow()
 
     // --- ESTADOS VOZ ---
     private val _estadoVoz = MutableStateFlow<EstadoVoz>(EstadoVoz.Inactivo)
@@ -71,7 +68,7 @@ class AgregarViewModel @Inject constructor(
         object Error : EstadoVoz()
     }
 
-    // --- MÉTODO DE INICIALIZACIÓN ---
+    // --- INICIALIZACIÓN ---
     fun inicializar(id: Int, esIngresoDefault: Boolean, vieneDeVoz: Boolean) {
         if (vieneDeVoz) {
             currentId = -1
@@ -79,10 +76,8 @@ class AgregarViewModel @Inject constructor(
         }
 
         if (id != -1) {
-            // Modo Edición
             cargarTransaccion(id)
         } else {
-            // Modo Nuevo Manual -> Limpieza estricta
             limpiarFormulario()
             _esIngreso.value = esIngresoDefault
         }
@@ -94,8 +89,7 @@ class AgregarViewModel @Inject constructor(
         _descripcion.value = ""
         _categoria.value = "Otros"
         _fecha.value = Date()
-        _esTransferencia.value = false
-        _cuentaDestinoId.value = null
+        _esMeta.value = false // Limpiamos meta también
     }
 
     private fun cargarTransaccion(id: Int) {
@@ -104,7 +98,7 @@ class AgregarViewModel @Inject constructor(
             val transaccion = repository.getTransaccionById(id)
             transaccion?.let {
                 _monto.value = it.monto.toString()
-                _descripcion.value = it.descripcion
+                _descripcion.value = it.notaCompleta
                 _esIngreso.value = it.esIngreso
                 _categoria.value = it.categoria
                 _cuentaIdSeleccionada.value = it.cuentaId
@@ -113,23 +107,18 @@ class AgregarViewModel @Inject constructor(
         }
     }
 
-    // --- SETTERS Y LÓGICA MANUAL ---
-
+    // --- SETTERS ---
     fun setCuentaOrigen(id: Int) { _cuentaIdSeleccionada.value = id }
     fun onMontoChange(n: String) { _monto.value = n }
     fun onCategoriaChange(n: String) { _categoria.value = n }
     fun onFechaChange(n: Date) { _fecha.value = n }
     fun reiniciarEstadoVoz() { _estadoVoz.value = EstadoVoz.Inactivo }
 
-    /**
-     * AUTOCOMPLETADO AL ESCRIBIR
-     */
     fun onDescripcionChange(nuevoTexto: String) {
         _descripcion.value = nuevoTexto
         detectarCuentaEnTexto(nuevoTexto)
     }
 
-    // --- FUNCIÓN HELPER PARA DETECTAR CUENTA (REUTILIZABLE) ---
     private fun detectarCuentaEnTexto(texto: String) {
         val listaCuentas = cuentas.value
         if (listaCuentas.isNotEmpty()) {
@@ -142,8 +131,7 @@ class AgregarViewModel @Inject constructor(
         }
     }
 
-    // --- LÓGICA VOZ E IA ---
-
+    // --- LÓGICA VOZ ---
     fun iniciarEscuchaInteligente() {
         viewModelScope.launch {
             _estadoVoz.value = EstadoVoz.Escuchando
@@ -158,6 +146,7 @@ class AgregarViewModel @Inject constructor(
         }
     }
 
+    // CORRECCIÓN: Restauramos la función pública 'procesarVoz' que llama ConfirmacionVozScreen
     fun procesarVoz(texto: String) {
         if (texto.isBlank()) return
         procesarTextoHibrido(texto)
@@ -177,12 +166,12 @@ class AgregarViewModel @Inject constructor(
                     val detectadoEsIngreso = interpretacion.tipo.uppercase() == "INGRESO"
                     _esIngreso.value = detectadoEsIngreso
 
-                    // 1. Intento con lo que dice la IA (Prioridad Alta)
+                    // Lógica simple para detectar Meta si la IA no lo devuelve explícitamente
+                    _esMeta.value = texto.contains("meta", ignoreCase = true) || texto.contains("ahorro", ignoreCase = true)
+
                     var cuentaEncontrada = cuentas.value.find {
                         it.nombre.equals(interpretacion.cuenta_origen, ignoreCase = true)
                     }
-
-                    // 2. Si la IA falló en mapear la cuenta, buscamos en el texto crudo (Respaldo)
                     if (cuentaEncontrada == null) {
                         cuentaEncontrada = cuentas.value.find {
                             texto.contains(it.nombre, ignoreCase = true)
@@ -207,21 +196,21 @@ class AgregarViewModel @Inject constructor(
         val textoLower = texto.lowercase()
         val esIngresoDetectado = textoLower.contains("ingreso") || textoLower.contains("gané")
 
+        // Detectar Meta localmente
+        val esMetaDetectada = textoLower.contains("meta") || textoLower.contains("ahorro")
+
         _esIngreso.value = esIngresoDetectado
+        _esMeta.value = esMetaDetectada
         _monto.value = extraerMontoMaster(texto).toString()
         _descripcion.value = texto
 
-        // 1. Detección de Categoría
         for (cat in CategoriaUtils.listaCategorias) {
             if (textoLower.contains(cat.nombre.lowercase())) {
                 _categoria.value = cat.nombre
                 break
             }
         }
-
-        // 2. Detección de Cuenta (AGREGADO AQUÍ PARA QUE FUNCIONE POR VOZ)
         detectarCuentaEnTexto(texto)
-
         _estadoVoz.value = EstadoVoz.Exito(esIngresoDetectado)
     }
 
@@ -261,9 +250,13 @@ class AgregarViewModel @Inject constructor(
         return mejorMonto
     }
 
+    // --- GUARDADO ---
     fun guardarTransaccion(onGuardadoExitoso: () -> Unit) {
         val montoVal = _monto.value.toDoubleOrNull() ?: 0.0
-        val desc = if (_descripcion.value.isBlank()) _categoria.value else _descripcion.value
+        val notaCompletaFinal = if (_descripcion.value.isBlank()) _categoria.value else _descripcion.value
+
+        // Generamos el resumen
+        val notaResumenGenerada = NotaUtils.generarResumen(notaCompletaFinal, _categoria.value)
 
         if (montoVal > 0) {
             viewModelScope.launch {
@@ -271,7 +264,8 @@ class AgregarViewModel @Inject constructor(
                     id = if (currentId == -1) 0 else currentId,
                     monto = montoVal,
                     categoria = _categoria.value,
-                    descripcion = desc,
+                    notaCompleta = notaCompletaFinal,
+                    notaResumen = notaResumenGenerada,
                     fecha = _fecha.value,
                     esIngreso = _esIngreso.value,
                     cuentaId = _cuentaIdSeleccionada.value

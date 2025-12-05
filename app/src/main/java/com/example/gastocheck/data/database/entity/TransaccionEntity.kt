@@ -23,8 +23,9 @@ data class TransaccionEntity(
     val id: Int = 0,
     val monto: Double,
     val categoria: String,
-    val descripcion: String,
+    val notaCompleta: String, // Antes "descripcion". Mantiene el detalle completo (Voz/Texto).
+    val notaResumen: String,  // NUEVO: Para mostrar en la lista principal (ej. "Oxxo").
     val fecha: Date,
     val esIngreso: Boolean,
-    val cuentaId: Int // <--- NUEVO CAMPO (Relación)
+    val cuentaId: Int
 )
