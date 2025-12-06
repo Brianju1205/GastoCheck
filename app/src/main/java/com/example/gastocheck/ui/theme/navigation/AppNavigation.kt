@@ -21,7 +21,7 @@ import com.example.gastocheck.ui.theme.screens.historial.HistorialScreen
 import com.example.gastocheck.ui.theme.screens.home.HomeScreen
 import com.example.gastocheck.ui.theme.screens.metas.MetasScreen
 import com.example.gastocheck.ui.theme.screens.voz.ConfirmacionVozScreen
-
+import com.example.gastocheck.ui.theme.screens.transferencia.RegistrarTransferenciaScreen
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
@@ -63,7 +63,11 @@ fun AppNavigation() {
                     },
                     onVozDetectada = { esIngresoDetectado ->
                         navController.navigate("agregar?id=-1&esIngreso=$esIngresoDetectado&vieneDeVoz=true")
+                    },
+                    onNavegarTransferencia = {
+                        navController.navigate("registrar_transferencia")
                     }
+
                 )
             }
 
@@ -71,7 +75,10 @@ fun AppNavigation() {
             composable("cuentas_lista") { CuentasListaScreen(onNavegarDetalle = { navController.navigate("detalle_cuenta/$it") }, onNavegarCrear = { navController.navigate("crear_cuenta") }) }
             composable("crear_cuenta") { CrearCuentaScreen(onBack = { navController.popBackStack() }) }
             composable("detalle_cuenta/{accountId}", arguments = listOf(navArgument("accountId") { type = NavType.IntType })) { backStackEntry -> DetalleCuentaScreen(accountId = backStackEntry.arguments?.getInt("accountId") ?: -1, onBack = { navController.popBackStack() }) }
-
+            composable("registrar_transferencia") {
+                RegistrarTransferenciaScreen(onBack = { navController.popBackStack() })
+            }
+             // <--- Conexión
             // --- RUTA HISTORIAL ---
             composable(
                 "historial/{accountId}",

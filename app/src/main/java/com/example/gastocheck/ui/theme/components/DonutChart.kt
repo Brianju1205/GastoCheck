@@ -13,6 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
@@ -29,15 +30,23 @@ fun DonutChart(
     size: Dp = 200.dp,
     thickness: Dp = 20.dp
 ) {
-    val totalReal = transacciones.sumOf { it.monto }
-
-    // Agrupamos y sumamos
-    val datosPorCategoria = remember(transacciones) {
+    // Modo por defecto: Agrupar por Categoría
+    val datos = remember(transacciones) {
         transacciones.groupBy { it.categoria }
             .mapValues { entry -> entry.value.sumOf { it.monto } }
     }
+    DonutChartGeneric(datos = datos, size = size, thickness = thickness)
+}
 
-    // Animación de Entrada (Giro de la gráfica)
+@Composable
+fun DonutChartGeneric(
+    datos: Map<String, Double>,
+    size: Dp = 200.dp,
+    thickness: Dp = 20.dp
+) {
+    val totalReal = datos.values.sum()
+
+    // Animación de Entrada
     var animationPlayed by remember { mutableStateOf(false) }
     val currentAngle by animateFloatAsState(
         targetValue = if (animationPlayed) 360f else 0f,
@@ -45,14 +54,14 @@ fun DonutChart(
         label = "chartAnimation"
     )
 
-    // Animación del Número Central (Cuenta progresiva)
+    // Animación del Número
     val animatedTotal by animateIntAsState(
         targetValue = totalReal.toInt(),
         animationSpec = tween(durationMillis = 800),
         label = "numberAnimation"
     )
 
-    LaunchedEffect(key1 = transacciones) {
+    LaunchedEffect(key1 = datos) {
         animationPlayed = true
     }
 
@@ -60,10 +69,9 @@ fun DonutChart(
         Canvas(modifier = Modifier.size(size)) {
             var startAngle = -90f
 
-            // Si no hay datos, dibujamos un círculo gris tenue de fondo
-            if (datosPorCategoria.isEmpty()) {
+            if (datos.isEmpty()) {
                 drawArc(
-                    color = androidx.compose.ui.graphics.Color.Gray.copy(alpha = 0.2f),
+                    color = Color.Gray.copy(alpha = 0.2f),
                     startAngle = 0f,
                     sweepAngle = 360f,
                     useCenter = false,
@@ -71,13 +79,23 @@ fun DonutChart(
                 )
             }
 
-            datosPorCategoria.forEach { (categoria, monto) ->
-                val color = CategoriaUtils.getColor(categoria)
+            datos.forEach { (clave, monto) ->
+                // Si la clave es una categoría, usamos su color. Si es una cuenta (Transferencia), generamos uno o usamos default.
+                val color = try {
+                    CategoriaUtils.getColor(clave)
+                } catch (e: Exception) {
+                    // Color fallback o aleatorio determinista para cuentas
+                    Color(clave.hashCode() or 0xFF000000.toInt())
+                }
+
+                // Si el color es gris (fallback), le damos un tono azulado si estamos en modo transferencias
+                val finalColor = if(color == Color.Gray) Color(0xFF2979FF) else color
+
                 val sweepAngle = if (totalReal > 0) (monto / totalReal).toFloat() * 360f else 0f
 
                 if (animationPlayed) {
                     drawArc(
-                        color = color,
+                        color = finalColor,
                         startAngle = startAngle,
                         sweepAngle = sweepAngle * (currentAngle / 360f),
                         useCenter = false,
@@ -88,12 +106,11 @@ fun DonutChart(
             }
         }
 
-        // Texto Central Animado
+        // Texto Central
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("Total", style = MaterialTheme.typography.labelMedium)
 
-            // Usamos CurrencyUtils para el formato $1,000
-            // Usamos animatedTotal para ver subir el número
+            // Usamos formatWithCommas para mostrar "15,608" con coma
             Text(
                 text = "$${CurrencyUtils.formatWithCommas(animatedTotal)}",
                 style = MaterialTheme.typography.headlineMedium,
