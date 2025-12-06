@@ -54,6 +54,7 @@ fun AgregarScreen(
     var showCategorySheet by remember { mutableStateOf(false) }
     var showAccountMenu by remember { mutableStateOf(false) }
 
+    // (El permissionLauncher ya no se usa porque quitamos el botón, pero lo dejamos por si acaso)
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
         if (isGranted) viewModel.iniciarEscuchaInteligente()
     }
@@ -146,7 +147,7 @@ fun AgregarScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Text("Nota", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
 
-                            // CAMPO NOTA: La lógica inteligente ahora vive en el ViewModel
+                            // CAMPO NOTA
                             BasicTextField(
                                 value = descripcion,
                                 onValueChange = { viewModel.onDescripcionChange(it) },
@@ -167,20 +168,15 @@ fun AgregarScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // 4. FAB MICROFONO Y BOTON GUARDAR
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                SmallFloatingActionButton(onClick = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) }, containerColor = MaterialTheme.colorScheme.tertiaryContainer, modifier = Modifier.padding(end = 16.dp)) {
-                    Icon(Icons.Default.Mic, contentDescription = "Dictar")
-                }
-
-                Button(
-                    onClick = { viewModel.guardarTransaccion { alRegresar() } },
-                    modifier = Modifier.weight(1f).height(56.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = actionColor, contentColor = MaterialTheme.colorScheme.onPrimary)
-                ) {
-                    Text("Guardar", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                }
+            // 4. BOTÓN GUARDAR (SIN MICROFONO)
+            // Ahora ocupa todo el ancho disponible
+            Button(
+                onClick = { viewModel.guardarTransaccion { alRegresar() } },
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = actionColor, contentColor = MaterialTheme.colorScheme.onPrimary)
+            ) {
+                Text("Guardar", fontSize = 18.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -196,8 +192,7 @@ fun AgregarScreen(
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
 
-                // AQUÍ USAMOS LA LÓGICA DE FILTRADO
-                // Obtenemos la lista correcta (Ingresos o Gastos)
+                // Lógica de filtrado de categorías
                 val listaMostrar = CategoriaUtils.obtenerCategoriasPorTipo(esIngreso)
 
                 LazyVerticalGrid(columns = GridCells.Adaptive(minSize = 80.dp), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
