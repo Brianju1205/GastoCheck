@@ -1,5 +1,6 @@
 package com.example.gastocheck.data.repository
 
+import com.example.gastocheck.data.database.entity.BalanceSnapshotEntity
 import com.example.gastocheck.data.database.entity.CuentaEntity
 import com.example.gastocheck.data.database.entity.TransaccionEntity
 import kotlinx.coroutines.flow.Flow
@@ -12,6 +13,9 @@ interface TransaccionRepository {
 
     // --- NUEVO: Para observar una sola cuenta en tiempo real ---
     fun getCuentaByIdFlow(id: Int): Flow<CuentaEntity?>
+
+    // --- NUEVO: Para obtener el historial de saldos (Carrusel) ---
+    fun getHistorialSaldos(cuentaId: Int): Flow<List<BalanceSnapshotEntity>>
 
     suspend fun getTransaccionById(id: Int): TransaccionEntity?
     suspend fun getCuentaById(id: Int): CuentaEntity?

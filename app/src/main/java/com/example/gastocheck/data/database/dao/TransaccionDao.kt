@@ -27,4 +27,10 @@ interface TransaccionDao {
 
     @Delete
     suspend fun deleteTransaccion(transaccion: TransaccionEntity)
+
+    @Query("SELECT * FROM transacciones")
+    suspend fun getAllTransaccionesList(): List<TransaccionEntity>
+
+    @Query("SELECT * FROM transacciones WHERE cuentaId = :cuentaId")
+    suspend fun getTransaccionesByCuentaList(cuentaId: Int): List<TransaccionEntity>
 }

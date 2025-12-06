@@ -17,6 +17,7 @@ import androidx.navigation.navArgument
 import com.example.gastocheck.ui.theme.screens.agregar.AgregarScreen
 import com.example.gastocheck.ui.theme.screens.agregar.AgregarViewModel
 import com.example.gastocheck.ui.theme.screens.cuentas.*
+import com.example.gastocheck.ui.theme.screens.historial.HistorialScreen
 import com.example.gastocheck.ui.theme.screens.home.HomeScreen
 import com.example.gastocheck.ui.theme.screens.metas.MetasScreen
 import com.example.gastocheck.ui.theme.screens.voz.ConfirmacionVozScreen
@@ -28,7 +29,6 @@ fun AppNavigation() {
     val currentRoute = navBackStackEntry?.destination?.route
 
     // --- INSTANCIA COMPARTIDA DEL VIEWMODEL ---
-    // Esto asegura que los datos cargados por voz en Home estén disponibles en AgregarScreen
     val sharedAgregarViewModel: AgregarViewModel = hiltViewModel()
 
     val rutasConBarra = listOf("home", "cuentas_lista", "metas")
@@ -49,18 +49,19 @@ fun AppNavigation() {
 
             composable("home") {
                 HomeScreen(
-                    // Pasamos el ViewModel compartido
                     agregarViewModel = sharedAgregarViewModel,
                     onNavegarAgregar = { esIngreso ->
-                        // Navegación manual: NO viene de voz
                         navController.navigate("agregar?id=-1&esIngreso=$esIngreso&vieneDeVoz=false")
                     },
                     onNavegarEditar = { id ->
                         navController.navigate("agregar?id=$id&vieneDeVoz=false")
                     },
                     onNavegarMetas = { navController.navigate("metas") },
+                    // --- NUEVO: Conectamos la navegación al historial ---
+                    onNavegarHistorial = { accountId ->
+                        navController.navigate("historial/$accountId")
+                    },
                     onVozDetectada = { esIngresoDetectado ->
-                        // Navegación por voz: SI viene de voz
                         navController.navigate("agregar?id=-1&esIngreso=$esIngresoDetectado&vieneDeVoz=true")
                     }
                 )
@@ -71,7 +72,16 @@ fun AppNavigation() {
             composable("crear_cuenta") { CrearCuentaScreen(onBack = { navController.popBackStack() }) }
             composable("detalle_cuenta/{accountId}", arguments = listOf(navArgument("accountId") { type = NavType.IntType })) { backStackEntry -> DetalleCuentaScreen(accountId = backStackEntry.arguments?.getInt("accountId") ?: -1, onBack = { navController.popBackStack() }) }
 
-            // --- RUTA AGREGAR CONFIGURADA ---
+            // --- RUTA HISTORIAL ---
+            composable(
+                "historial/{accountId}",
+                arguments = listOf(navArgument("accountId") { type = NavType.IntType })
+            ) {
+                // El ViewModel de Historial obtendrá el accountId automáticamente del SavedStateHandle
+                HistorialScreen(onBack = { navController.popBackStack() })
+            }
+
+            // --- RUTA AGREGAR ---
             composable(
                 route = "agregar?id={id}&esIngreso={esIngreso}&vieneDeVoz={vieneDeVoz}",
                 arguments = listOf(
@@ -84,8 +94,6 @@ fun AppNavigation() {
                 val esIngreso = backStackEntry.arguments?.getBoolean("esIngreso") ?: false
                 val vieneDeVoz = backStackEntry.arguments?.getBoolean("vieneDeVoz") ?: false
 
-                // Llamamos a inicializar en el ViewModel compartido
-                // Si vieneDeVoz es true, NO borrará los datos que acaba de cargar la IA.
                 LaunchedEffect(Unit) {
                     sharedAgregarViewModel.inicializar(id, esIngreso, vieneDeVoz)
                 }

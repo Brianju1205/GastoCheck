@@ -17,7 +17,10 @@ interface CuentaDao {
     @Query("SELECT * FROM cuentas WHERE id = :id")
     suspend fun getCuentaById(id: Int): CuentaEntity?
 
+    @Query("SELECT * FROM cuentas")
+    suspend fun getCuentasList(): List<CuentaEntity>
     // --- NUEVO: ESTE ES EL QUE NECESITA EL VIEWMODEL ---
+
     @Query("SELECT * FROM cuentas WHERE id = :id")
     fun getCuentaByIdFlow(id: Int): Flow<CuentaEntity?>
 

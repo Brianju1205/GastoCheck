@@ -3,6 +3,7 @@ package com.example.gastocheck.ui.theme.screens.home
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -36,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.gastocheck.data.database.entity.TransaccionEntity
+import com.example.gastocheck.ui.theme.components.BalanceCarousel
 import com.example.gastocheck.ui.theme.components.DialogoProcesando
 import com.example.gastocheck.ui.theme.components.DonutChart
 import com.example.gastocheck.ui.theme.screens.agregar.AgregarViewModel
@@ -44,6 +46,7 @@ import com.example.gastocheck.ui.theme.util.CategoriaUtils
 import com.example.gastocheck.ui.theme.util.CurrencyUtils
 import com.example.gastocheck.ui.theme.util.DateUtils
 import kotlinx.coroutines.launch
+import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -53,10 +56,18 @@ fun HomeScreen(
     onNavegarAgregar: (Boolean) -> Unit,
     onNavegarEditar: (Int) -> Unit,
     onNavegarMetas: () -> Unit,
-    onVozDetectada: (Boolean) -> Unit // Recibe si es ingreso o gasto
+    onNavegarHistorial: (Int) -> Unit,
+    onVozDetectada: (Boolean) -> Unit
 ) {
     val saldoTotal by viewModel.saldoTotal.collectAsState()
-    val listaTransacciones by viewModel.transacciones.collectAsState()
+    val historial by viewModel.historialSaldos.collectAsState()
+    val listaTransacciones by viewModel.transaccionesFiltradas.collectAsState()
+    val filtroTiempo by viewModel.filtroTiempo.collectAsState()
+
+    // Estado para el rango de fechas
+    val rangoFechas by viewModel.rangoFechas.collectAsState()
+    var mostrarSelectorRango by remember { mutableStateOf(false) }
+
     val listaMetas by viewModel.metas.collectAsState()
     val cuentaSeleccionadaId by viewModel.cuentaSeleccionadaId.collectAsState()
     val cuentas by viewModel.cuentas.collectAsState()
@@ -68,12 +79,14 @@ fun HomeScreen(
     val colorSaldo = if (saldoTotal < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
     var mostrarMenuAgregar by remember { mutableStateOf(false) }
     var mostrarMenuCuentas by remember { mutableStateOf(false) }
+    var mostrarMenuFiltro by remember { mutableStateOf(false) }
+
     var transaccionSeleccionada by remember { mutableStateOf<TransaccionEntity?>(null) }
     var mostrarDetalle by remember { mutableStateOf(false) }
+    var mostrarConfirmacionBorrar by remember { mutableStateOf(false) }
 
     val nombreCuentaActual = if (cuentaSeleccionadaId == -1) "Todas las cuentas" else cuentas.find { it.id == cuentaSeleccionadaId }?.nombre ?: "Seleccionar"
 
-    // VOZ
     val estadoVoz by agregarViewModel.estadoVoz.collectAsState()
     val haptic = LocalHapticFeedback.current
 
@@ -81,13 +94,68 @@ fun HomeScreen(
         if (isGranted) agregarViewModel.iniciarEscuchaInteligente()
     }
 
-    // NAVEGACIÓN INTELIGENTE
     LaunchedEffect(estadoVoz) {
         if (estadoVoz is EstadoVoz.Exito) {
             val exito = estadoVoz as EstadoVoz.Exito
-            // Llamamos a onVozDetectada pasando el tipo. Esto en AppNavigation activa vieneDeVoz=true
             onVozDetectada(exito.esIngreso)
             agregarViewModel.reiniciarEstadoVoz()
+        }
+    }
+
+    // --- DIALOGOS ---
+
+    // Selector de Rango de Fechas (Mejorado con texto más pequeño)
+    if (mostrarSelectorRango) {
+        val datePickerState = rememberDateRangePickerState()
+        DatePickerDialog(
+            onDismissRequest = { mostrarSelectorRango = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val inicio = datePickerState.selectedStartDateMillis
+                        val fin = datePickerState.selectedEndDateMillis ?: inicio
+                        if (inicio != null) {
+                            viewModel.establecerRangoFechas(inicio, fin!!)
+                        }
+                        mostrarSelectorRango = false
+                    }
+                ) { Text("Aplicar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarSelectorRango = false }) { Text("Cancelar") }
+            }
+        ) {
+            DateRangePicker(
+                state = datePickerState,
+                title = {
+                    Text(
+                        text = "Seleccionar rango",
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp)
+                    )
+                },
+                headline = {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        val startDate = datePickerState.selectedStartDateMillis?.let { Date(it) }
+                        val endDate = datePickerState.selectedEndDateMillis?.let { Date(it) }
+
+                        val startText = if (startDate != null) DateUtils.formatearFechaAmigable(startDate) else "Inicio"
+                        val endText = if (endDate != null) DateUtils.formatearFechaAmigable(endDate) else "Fin"
+
+                        Text(
+                            text = "$startText  —  $endText",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                modifier = Modifier.height(500.dp),
+                showModeToggle = false
+            )
         }
     }
 
@@ -99,16 +167,40 @@ fun HomeScreen(
 
     if (mostrarDetalle && transaccionSeleccionada != null) {
         val t = transaccionSeleccionada!!
-
-        // --- NUEVO: Buscamos el nombre de la cuenta para mostrarlo en el diálogo ---
         val nombreCuenta = cuentas.find { it.id == t.cuentaId }?.nombre ?: "Cuenta desconocida"
 
         DetalleTransaccionDialog(
             transaccion = t,
-            nombreCuenta = nombreCuenta, // Pasamos el nombre aquí
+            nombreCuenta = nombreCuenta,
             onDismiss = { mostrarDetalle = false },
-            onDelete = { viewModel.borrarTransaccion(t); mostrarDetalle = false },
+            onDelete = { mostrarConfirmacionBorrar = true },
             onEdit = { mostrarDetalle = false; onNavegarEditar(t.id) }
+        )
+    }
+
+    if (mostrarConfirmacionBorrar && transaccionSeleccionada != null) {
+        AlertDialog(
+            onDismissRequest = { mostrarConfirmacionBorrar = false },
+            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text("¿Eliminar movimiento?") },
+            text = { Text("¿Estás seguro de que deseas eliminar este registro? Esta acción no se puede deshacer y ajustará tus saldos.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.borrarTransaccion(transaccionSeleccionada!!)
+                        mostrarConfirmacionBorrar = false
+                        mostrarDetalle = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Eliminar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarConfirmacionBorrar = false }) {
+                    Text("Cancelar")
+                }
+            }
         )
     }
 
@@ -210,32 +302,111 @@ fun HomeScreen(
                                     cuentas.forEach { cuenta -> DropdownMenuItem(text = { Text(cuenta.nombre) }, onClick = { viewModel.cambiarFiltroCuenta(cuenta.id); mostrarMenuCuentas = false }) }
                                 }
                             }
-                            Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = CurrencyUtils.formatCurrency(saldoTotal), style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Bold, color = colorSaldo), fontSize = 56.sp)
-                                Text("Disponible", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            BalanceCarousel(
+                                saldoActual = saldoTotal,
+                                historial = historial,
+                                onVerMasClick = { onNavegarHistorial(cuentaSeleccionadaId) }
+                            )
                         }
                         if (listaMetas.isNotEmpty()) { item { val m = listaMetas.last(); CardProgresoAhorro(m.nombre, m.montoAhorrado, m.montoObjetivo) } }
                         item { Text("Últimos Movimientos", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp)) }
+
                         val ultimos = listaTransacciones.take(4)
-                        items(ultimos) { t -> ItemTransaccionModerno(t, onEdit = { onNavegarEditar(t.id) }, onDelete = { viewModel.borrarTransaccion(t) }, onItemClick = { transaccionSeleccionada = t; mostrarDetalle = true }) }
+                        items(ultimos) { t ->
+                            val nombreCuenta = cuentas.find { it.id == t.cuentaId }?.nombre ?: "Efectivo"
+                            ItemTransaccionModerno(
+                                transaccion = t,
+                                nombreCuenta = nombreCuenta,
+                                onEdit = { onNavegarEditar(t.id) },
+                                onDelete = { viewModel.borrarTransaccion(t) },
+                                onItemClick = { transaccionSeleccionada = t; mostrarDetalle = true }
+                            )
+                        }
                     }
                     1, 2, 3 -> {
+                        item {
+                            Box(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)) {
+                                val tituloFiltro = when(filtroTiempo) {
+                                    FiltroTiempo.DIA -> "Hoy"
+                                    FiltroTiempo.SEMANA -> "Esta Semana"
+                                    FiltroTiempo.MES -> "Este Mes"
+                                    FiltroTiempo.ANIO -> "Este Año"
+                                    FiltroTiempo.RANGO -> {
+                                        if (rangoFechas != null) DateUtils.formatearRango(rangoFechas!!.first, rangoFechas!!.second)
+                                        else "Rango"
+                                    }
+                                }
+                                Text(text = tituloFiltro, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Center))
+                                Box(modifier = Modifier.align(Alignment.CenterEnd)) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                                            .combinedClickable(
+                                                onClick = { mostrarMenuFiltro = true },
+                                                onLongClick = {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    mostrarSelectorRango = true
+                                                }
+                                            )
+                                            .padding(8.dp)
+                                    ) {
+                                        Icon(Icons.Default.DateRange, contentDescription = "Filtrar", tint = MaterialTheme.colorScheme.primary)
+                                    }
+
+                                    DropdownMenu(expanded = mostrarMenuFiltro, onDismissRequest = { mostrarMenuFiltro = false }) {
+                                        DropdownMenuItem(text = { Text("Día") }, onClick = { viewModel.cambiarFiltroTiempo(FiltroTiempo.DIA); mostrarMenuFiltro = false })
+                                        DropdownMenuItem(text = { Text("Semana") }, onClick = { viewModel.cambiarFiltroTiempo(FiltroTiempo.SEMANA); mostrarMenuFiltro = false })
+                                        DropdownMenuItem(text = { Text("Mes") }, onClick = { viewModel.cambiarFiltroTiempo(FiltroTiempo.MES); mostrarMenuFiltro = false })
+                                        DropdownMenuItem(text = { Text("Año") }, onClick = { viewModel.cambiarFiltroTiempo(FiltroTiempo.ANIO); mostrarMenuFiltro = false })
+
+                                        // --- NUEVO: OPCIÓN RANGO ---
+                                        DropdownMenuItem(
+                                            text = { Text("Rango") },
+                                            onClick = {
+                                                mostrarMenuFiltro = false
+                                                mostrarSelectorRango = true // Abre el calendario al dar clic
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         val listaFiltrada = when(page) {
                             1 -> listaTransacciones.filter { !it.esIngreso }
                             2 -> listaTransacciones.filter { it.esIngreso }
                             3 -> listaTransacciones
                             else -> emptyList()
                         }
+
                         item {
                             if (listaFiltrada.isNotEmpty() && page != 3) {
-                                Box(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) { DonutChart(listaFiltrada, size = 200.dp) }
+                                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp), contentAlignment = Alignment.Center) {
+                                    DonutChart(listaFiltrada, size = 200.dp)
+                                }
                             }
                         }
+
                         val agrupado = listaFiltrada.groupBy { DateUtils.formatearFechaAmigable(it.fecha) }
                         agrupado.forEach { (f, ts) ->
                             item { Text(f, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth(), textAlign = TextAlign.Center) }
-                            items(ts) { t -> ItemTransaccionModerno(t, onEdit = { onNavegarEditar(t.id) }, onDelete = { viewModel.borrarTransaccion(t) }, onItemClick = { transaccionSeleccionada = t; mostrarDetalle = true }) }
+                            items(ts) { t ->
+                                val nombreCuenta = cuentas.find { it.id == t.cuentaId }?.nombre ?: "Efectivo"
+                                ItemTransaccionModerno(
+                                    transaccion = t,
+                                    nombreCuenta = nombreCuenta,
+                                    onEdit = { onNavegarEditar(t.id) },
+                                    onDelete = { viewModel.borrarTransaccion(t) },
+                                    onItemClick = { transaccionSeleccionada = t; mostrarDetalle = true }
+                                )
+                            }
+                        }
+
+                        if (listaFiltrada.isEmpty()) {
+                            item { Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Text("No hay movimientos", color = MaterialTheme.colorScheme.outline) } }
                         }
                     }
                 }
@@ -244,7 +415,76 @@ fun HomeScreen(
     }
 }
 
-// --- COMPONENTES AUXILIARES ---
+// ... Resto de componentes ...
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun ItemTransaccionModerno(
+    transaccion: TransaccionEntity,
+    nombreCuenta: String,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onItemClick: () -> Unit = {}
+) {
+    var mostrarMenu by remember { mutableStateOf(false) }
+    val icono = CategoriaUtils.getIcono(transaccion.categoria)
+    val colorIcono = CategoriaUtils.getColor(transaccion.categoria)
+    val signo = if (transaccion.esIngreso) "+" else "-"
+    val colorMonto = if (transaccion.esIngreso) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+
+    Box {
+        Row(modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { onItemClick() }, onLongClick = { mostrarMenu = true }).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
+                Icon(imageVector = icono, contentDescription = null, tint = colorIcono, modifier = Modifier.size(24.dp))
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = transaccion.categoria,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = nombreCuenta,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text(text = "$signo${CurrencyUtils.formatCurrency(transaccion.monto)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = colorMonto)
+        }
+        DropdownMenu(expanded = mostrarMenu, onDismissRequest = { mostrarMenu = false }) {
+            DropdownMenuItem(text = { Text("Editar") }, onClick = { mostrarMenu = false; onEdit() }, leadingIcon = { Icon(Icons.Default.Edit, null) })
+            DropdownMenuItem(text = { Text("Eliminar") }, onClick = { mostrarMenu = false; onDelete() }, leadingIcon = { Icon(Icons.Default.Delete, null) })
+        }
+    }
+}
+
+@Composable
+fun DetalleTransaccionDialog(transaccion: TransaccionEntity, nombreCuenta: String, onDismiss: () -> Unit, onDelete: () -> Unit, onEdit: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        icon = { Icon(CategoriaUtils.getIcono(transaccion.categoria), null, tint = CategoriaUtils.getColor(transaccion.categoria), modifier = Modifier.size(48.dp)) },
+        title = { Text(transaccion.categoria) },
+        text = {
+            Column {
+                Text(CurrencyUtils.formatCurrency(transaccion.monto), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(4.dp))
+                    Text(nombreCuenta, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(transaccion.notaCompleta.ifEmpty { "Sin nota" })
+                Spacer(Modifier.height(4.dp))
+                Text(DateUtils.formatearFechaAmigable(transaccion.fecha), style = MaterialTheme.typography.bodySmall)
+            }
+        },
+        confirmButton = { TextButton(onClick = onEdit) { Text("Editar") } },
+        dismissButton = { Row { TextButton(onClick = onDelete) { Text("Eliminar") }; TextButton(onClick = onDismiss) { Text("Cerrar") } } }
+    )
+}
+
 @Composable
 fun DialogoEscuchandoAnimado(onDismiss: () -> Unit) {
     val infiniteTransition = rememberInfiniteTransition()
@@ -275,71 +515,6 @@ fun CardProgresoAhorro(nombre: String, ahorrado: Double, meta: Double) {
             LinearProgressIndicator(progress = { progreso }, modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape))
         }
     }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun ItemTransaccionModerno(transaccion: TransaccionEntity, onEdit: () -> Unit, onDelete: () -> Unit, onItemClick: () -> Unit = {}) {
-    var mostrarMenu by remember { mutableStateOf(false) }
-    val icono = CategoriaUtils.getIcono(transaccion.categoria)
-    val colorIcono = CategoriaUtils.getColor(transaccion.categoria)
-    val signo = if (transaccion.esIngreso) "+" else "-"
-    val colorMonto = if (transaccion.esIngreso) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-
-    Box {
-        Row(modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { onItemClick() }, onLongClick = { mostrarMenu = true }).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) { Icon(imageVector = icono, contentDescription = null, tint = colorIcono, modifier = Modifier.size(24.dp)) }
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                // AQUÍ USAMOS LA NOTA RESUMEN
-                Text(text = transaccion.notaResumen.ifEmpty { transaccion.categoria }, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                Text(text = transaccion.categoria, style = MaterialTheme.typography.bodySmall)
-            }
-            Text(text = "$signo${CurrencyUtils.formatCurrency(transaccion.monto)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = colorMonto)
-        }
-        DropdownMenu(expanded = mostrarMenu, onDismissRequest = { mostrarMenu = false }) {
-            DropdownMenuItem(text = { Text("Editar") }, onClick = { mostrarMenu = false; onEdit() }, leadingIcon = { Icon(Icons.Default.Edit, null) })
-            DropdownMenuItem(text = { Text("Eliminar") }, onClick = { mostrarMenu = false; onDelete() }, leadingIcon = { Icon(Icons.Default.Delete, null) })
-        }
-    }
-}
-
-@Composable
-fun DetalleTransaccionDialog(
-    transaccion: TransaccionEntity,
-    nombreCuenta: String, // Recibimos el nombre de la cuenta
-    onDismiss: () -> Unit,
-    onDelete: () -> Unit,
-    onEdit: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
-        icon = { Icon(CategoriaUtils.getIcono(transaccion.categoria), null, tint = CategoriaUtils.getColor(transaccion.categoria), modifier = Modifier.size(48.dp)) },
-        title = { Text(transaccion.categoria) },
-        text = {
-            Column {
-                Text(CurrencyUtils.formatCurrency(transaccion.monto), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(8.dp))
-
-                // --- NUEVO: Mostramos la cuenta ---
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.width(4.dp))
-                    Text(nombreCuenta, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                }
-
-                Spacer(Modifier.height(8.dp))
-
-                // NOTA COMPLETA
-                Text(transaccion.notaCompleta.ifEmpty { "Sin nota" })
-                Spacer(Modifier.height(4.dp))
-                Text(DateUtils.formatearFechaAmigable(transaccion.fecha), style = MaterialTheme.typography.bodySmall)
-            }
-        },
-        confirmButton = { TextButton(onClick = onEdit) { Text("Editar") } },
-        dismissButton = { Row { TextButton(onClick = onDelete) { Text("Eliminar") }; TextButton(onClick = onDismiss) { Text("Cerrar") } } }
-    )
 }
 
 @Composable

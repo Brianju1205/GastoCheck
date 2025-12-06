@@ -54,11 +54,6 @@ fun AgregarScreen(
     var showCategorySheet by remember { mutableStateOf(false) }
     var showAccountMenu by remember { mutableStateOf(false) }
 
-    // Aseguramos que al entrar se limpie si es necesario o se inicialice
-    // Nota: viewModel.inicializar() debería llamarse idealmente desde el NavigationGraph,
-    // pero si navegas hacia atrás y vuelves a entrar, el ViewModel se mantiene vivo.
-    // Como añadimos limpieza al guardar, aquí solo observamos.
-
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
         if (isGranted) viewModel.iniciarEscuchaInteligente()
     }
@@ -193,9 +188,20 @@ fun AgregarScreen(
     if (showCategorySheet) {
         ModalBottomSheet(onDismissRequest = { showCategorySheet = false }, containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Seleccionar Categoría", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
+                // Título dinámico
+                Text(
+                    text = if (esIngreso) "Categorías de Ingreso" else "Categorías de Gasto",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                // AQUÍ USAMOS LA LÓGICA DE FILTRADO
+                // Obtenemos la lista correcta (Ingresos o Gastos)
+                val listaMostrar = CategoriaUtils.obtenerCategoriasPorTipo(esIngreso)
+
                 LazyVerticalGrid(columns = GridCells.Adaptive(minSize = 80.dp), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    items(CategoriaUtils.listaCategorias) { cat ->
+                    items(listaMostrar) { cat ->
                         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { viewModel.onCategoriaChange(cat.nombre); showCategorySheet = false }.padding(8.dp)) {
                             Box(modifier = Modifier.size(50.dp).clip(CircleShape).background(cat.color.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) { Icon(cat.icono, null, tint = cat.color) }
                             Spacer(modifier = Modifier.height(4.dp))
