@@ -22,28 +22,21 @@ class TransaccionRepositoryImpl @Inject constructor(
     override fun getTransaccionesGlobales() = transaccionDao.getAllTransacciones()
     override fun getTransaccionesPorCuenta(cuentaId: Int) = transaccionDao.getTransaccionesByCuenta(cuentaId)
     override fun getCuentas() = cuentaDao.getCuentas()
-
-    override fun getCuentaByIdFlow(id: Int): Flow<CuentaEntity?> = cuentaDao.getCuentaByIdFlow(id)
-
+    override fun getCuentaByIdFlow(id: Int) = cuentaDao.getCuentaByIdFlow(id)
+    override fun getHistorialSaldos(cuentaId: Int) = balanceSnapshotDao.getHistorialSaldos(cuentaId)
     override suspend fun getTransaccionById(id: Int) = transaccionDao.getTransaccionById(id)
     override suspend fun getCuentaById(id: Int) = cuentaDao.getCuentaById(id)
-
-    // Método para el carrusel de historial
-    override fun getHistorialSaldos(cuentaId: Int): Flow<List<BalanceSnapshotEntity>> {
-        return balanceSnapshotDao.getHistorialSaldos(cuentaId)
-    }
-
     override suspend fun insertCuenta(cuenta: CuentaEntity) = cuentaDao.insertCuenta(cuenta)
+
+    // --- NUEVO: Implementación de búsqueda de pareja ---
+    override suspend fun getTransaccionPareja(transaccion: TransaccionEntity): TransaccionEntity? {
+        return transaccionDao.getTransaccionPareja(transaccion.fecha, transaccion.monto, transaccion.id)
+    }
 
     override suspend fun insertTransaccion(transaccion: TransaccionEntity) {
         db.withTransaction {
-            // 1. Guardar la transacción
             transaccionDao.insertTransaccion(transaccion)
-
-            // 2. Foto del saldo de la cuenta específica
             registrarSnapshot(transaccion.cuentaId, transaccion.fecha, transaccion.categoria)
-
-            // 3. Foto del saldo global
             registrarSnapshot(-1, transaccion.fecha, transaccion.categoria)
         }
     }
@@ -51,9 +44,26 @@ class TransaccionRepositoryImpl @Inject constructor(
     override suspend fun deleteTransaccion(transaccion: TransaccionEntity) {
         db.withTransaction {
             transaccionDao.deleteTransaccion(transaccion)
-            // Actualizar historial tras borrado
-            registrarSnapshot(transaccion.cuentaId, Date(), "Corrección (Borrado)")
-            registrarSnapshot(-1, Date(), "Corrección (Borrado)")
+            registrarSnapshot(transaccion.cuentaId, Date(), "Corrección")
+            registrarSnapshot(-1, Date(), "Corrección")
+        }
+    }
+
+    override suspend fun eliminarTransferenciaCompleta(id: Int) {
+        db.withTransaction {
+            val tOriginal = transaccionDao.getTransaccionById(id) ?: return@withTransaction
+            val tPareja = transaccionDao.getTransaccionPareja(tOriginal.fecha, tOriginal.monto, tOriginal.id)
+
+            transaccionDao.deleteTransaccion(tOriginal)
+            if (tPareja != null) {
+                transaccionDao.deleteTransaccion(tPareja)
+            }
+
+            registrarSnapshot(tOriginal.cuentaId, Date(), "Corrección Transferencia")
+            if (tPareja != null) {
+                registrarSnapshot(tPareja.cuentaId, Date(), "Corrección Transferencia")
+            }
+            registrarSnapshot(-1, Date(), "Corrección Transferencia")
         }
     }
 
@@ -63,7 +73,7 @@ class TransaccionRepositoryImpl @Inject constructor(
             val cuentaDestino = cuentaDao.getCuentaById(destinoId)
 
             if (cuentaOrigen != null && cuentaDestino != null) {
-                // Salida
+                // SALIDA
                 val salida = TransaccionEntity(
                     monto = monto,
                     categoria = "Transferencia",
@@ -75,7 +85,7 @@ class TransaccionRepositoryImpl @Inject constructor(
                 )
                 transaccionDao.insertTransaccion(salida)
 
-                // Entrada
+                // ENTRADA
                 val entrada = TransaccionEntity(
                     monto = monto,
                     categoria = "Transferencia",
@@ -87,15 +97,12 @@ class TransaccionRepositoryImpl @Inject constructor(
                 )
                 transaccionDao.insertTransaccion(entrada)
 
-                // Actualizar historiales
                 registrarSnapshot(origenId, fecha, "Transferencia Enviada")
                 registrarSnapshot(destinoId, fecha, "Transferencia Recibida")
                 registrarSnapshot(-1, fecha, "Transferencia")
             }
         }
     }
-
-    // --- Lógica Privada de Cálculo ---
 
     private suspend fun registrarSnapshot(cuentaId: Int, fecha: Date, motivo: String) {
         val saldoCalculado = calcularSaldoActual(cuentaId)
@@ -110,23 +117,17 @@ class TransaccionRepositoryImpl @Inject constructor(
 
     private suspend fun calcularSaldoActual(cuentaId: Int): Double {
         return if (cuentaId == -1) {
-            // Global
             val cuentas = cuentaDao.getCuentasList()
             val transacciones = transaccionDao.getAllTransaccionesList()
-
             val saldoInicialTotal = cuentas.sumOf { it.saldoInicial }
             val ingresos = transacciones.filter { it.esIngreso }.sumOf { it.monto }
             val gastos = transacciones.filter { !it.esIngreso }.sumOf { it.monto }
-
             saldoInicialTotal + ingresos - gastos
         } else {
-            // Individual
             val cuenta = cuentaDao.getCuentaById(cuentaId) ?: return 0.0
             val transacciones = transaccionDao.getTransaccionesByCuentaList(cuentaId)
-
             val ingresos = transacciones.filter { it.esIngreso }.sumOf { it.monto }
             val gastos = transacciones.filter { !it.esIngreso }.sumOf { it.monto }
-
             cuenta.saldoInicial + ingresos - gastos
         }
     }

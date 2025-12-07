@@ -7,6 +7,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.example.gastocheck.data.database.entity.TransaccionEntity
 import kotlinx.coroutines.flow.Flow
+import java.util.Date
 
 @Dao
 interface TransaccionDao {
@@ -30,6 +31,9 @@ interface TransaccionDao {
 
     @Query("SELECT * FROM transacciones")
     suspend fun getAllTransaccionesList(): List<TransaccionEntity>
+
+    @Query("SELECT * FROM transacciones WHERE fecha = :fecha AND monto = :monto AND categoria = 'Transferencia' AND id != :originalId LIMIT 1")
+    suspend fun getTransaccionPareja(fecha: Date, monto: Double, originalId: Int): TransaccionEntity?
 
     @Query("SELECT * FROM transacciones WHERE cuentaId = :cuentaId")
     suspend fun getTransaccionesByCuentaList(cuentaId: Int): List<TransaccionEntity>

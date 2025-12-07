@@ -22,6 +22,7 @@ import com.example.gastocheck.ui.theme.screens.home.HomeScreen
 import com.example.gastocheck.ui.theme.screens.metas.MetasScreen
 import com.example.gastocheck.ui.theme.screens.voz.ConfirmacionVozScreen
 import com.example.gastocheck.ui.theme.screens.transferencia.RegistrarTransferenciaScreen
+
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
@@ -38,14 +39,51 @@ fun AppNavigation() {
         bottomBar = {
             if (showBars) {
                 NavigationBar {
-                    NavigationBarItem(icon = { Icon(Icons.Default.Home, null) }, label = { Text("Inicio") }, selected = currentRoute == "home", onClick = { navController.navigate("home") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } })
-                    NavigationBarItem(icon = { Icon(Icons.Default.AccountBalance, null) }, label = { Text("Cuentas") }, selected = currentRoute == "cuentas_lista", onClick = { navController.navigate("cuentas_lista") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } })
-                    NavigationBarItem(icon = { Icon(Icons.Default.Star, null) }, label = { Text("Metas") }, selected = currentRoute == "metas", onClick = { navController.navigate("metas") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } })
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.Home, null) },
+                        label = { Text("Inicio") },
+                        selected = currentRoute == "home",
+                        onClick = {
+                            navController.navigate("home") {
+                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    )
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.AccountBalance, null) },
+                        label = { Text("Cuentas") },
+                        selected = currentRoute == "cuentas_lista",
+                        onClick = {
+                            navController.navigate("cuentas_lista") {
+                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    )
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.Star, null) },
+                        label = { Text("Metas") },
+                        selected = currentRoute == "metas",
+                        onClick = {
+                            navController.navigate("metas") {
+                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    )
                 }
             }
         }
     ) { innerPadding ->
-        NavHost(navController = navController, startDestination = "home", modifier = Modifier.padding(innerPadding)) {
+        NavHost(
+            navController = navController,
+            startDestination = "home",
+            modifier = Modifier.padding(innerPadding)
+        ) {
 
             composable("home") {
                 HomeScreen(
@@ -64,21 +102,50 @@ fun AppNavigation() {
                     onVozDetectada = { esIngresoDetectado ->
                         navController.navigate("agregar?id=-1&esIngreso=$esIngresoDetectado&vieneDeVoz=true")
                     },
-                    onNavegarTransferencia = {
-                        navController.navigate("registrar_transferencia")
+                    // --- CORRECCIÓN AQUÍ: ACEPTAR ID PARA EDITAR ---
+                    onNavegarTransferencia = { id ->
+                        navController.navigate("registrar_transferencia?id=$id")
                     }
-
                 )
             }
 
             composable("metas") { MetasScreen() }
-            composable("cuentas_lista") { CuentasListaScreen(onNavegarDetalle = { navController.navigate("detalle_cuenta/$it") }, onNavegarCrear = { navController.navigate("crear_cuenta") }) }
-            composable("crear_cuenta") { CrearCuentaScreen(onBack = { navController.popBackStack() }) }
-            composable("detalle_cuenta/{accountId}", arguments = listOf(navArgument("accountId") { type = NavType.IntType })) { backStackEntry -> DetalleCuentaScreen(accountId = backStackEntry.arguments?.getInt("accountId") ?: -1, onBack = { navController.popBackStack() }) }
-            composable("registrar_transferencia") {
-                RegistrarTransferenciaScreen(onBack = { navController.popBackStack() })
+
+            composable("cuentas_lista") {
+                CuentasListaScreen(
+                    onNavegarDetalle = { navController.navigate("detalle_cuenta/$it") },
+                    onNavegarCrear = { navController.navigate("crear_cuenta") }
+                )
             }
-             // <--- Conexión
+
+            composable("crear_cuenta") {
+                CrearCuentaScreen(onBack = { navController.popBackStack() })
+            }
+
+            composable(
+                "detalle_cuenta/{accountId}",
+                arguments = listOf(navArgument("accountId") { type = NavType.IntType })
+            ) { backStackEntry ->
+                DetalleCuentaScreen(
+                    accountId = backStackEntry.arguments?.getInt("accountId") ?: -1,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
+            // --- RUTA TRANSFERENCIA ACTUALIZADA (Soporta ID opcional) ---
+            composable(
+                route = "registrar_transferencia?id={id}",
+                arguments = listOf(
+                    navArgument("id") { type = NavType.IntType; defaultValue = -1 }
+                )
+            ) { backStackEntry ->
+                val id = backStackEntry.arguments?.getInt("id") ?: -1
+                RegistrarTransferenciaScreen(
+                    idTransaccion = id, // Pasamos el ID a la pantalla
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
             // --- RUTA HISTORIAL ---
             composable(
                 "historial/{accountId}",
