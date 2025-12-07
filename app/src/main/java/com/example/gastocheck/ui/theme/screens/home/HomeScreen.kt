@@ -58,14 +58,11 @@ fun HomeScreen(
     onNavegarMetas: () -> Unit,
     onNavegarHistorial: (Int) -> Unit,
     onVozDetectada: (Boolean) -> Unit,
-    onNavegarTransferencia: (Int) -> Unit // Recibe ID para editar (-1 para crear)
+    onNavegarTransferencia: (Int, String?) -> Unit // <--- Actualizado: ID y TextoOpcional
 ) {
     val saldoTotal by viewModel.saldoTotal.collectAsState()
     val historial by viewModel.historialSaldos.collectAsState()
-
-    // Lista completa filtrada por FECHA desde el ViewModel
     val listaTransacciones by viewModel.transaccionesFiltradas.collectAsState()
-
     val filtroTiempo by viewModel.filtroTiempo.collectAsState()
     val rangoFechas by viewModel.rangoFechas.collectAsState()
     var mostrarSelectorRango by remember { mutableStateOf(false) }
@@ -78,12 +75,10 @@ fun HomeScreen(
     val pagerState = rememberPagerState(pageCount = { tabs.size })
     val coroutineScope = rememberCoroutineScope()
 
-    // Estados de UI
     var mostrarMenuAgregar by remember { mutableStateOf(false) }
     var mostrarMenuCuentas by remember { mutableStateOf(false) }
     var mostrarMenuFiltro by remember { mutableStateOf(false) }
 
-    // Estados para Edición/Borrado
     var transaccionSeleccionada by remember { mutableStateOf<TransaccionEntity?>(null) }
     var mostrarDetalle by remember { mutableStateOf(false) }
     var mostrarConfirmacionBorrar by remember { mutableStateOf(false) }
@@ -105,8 +100,15 @@ fun HomeScreen(
         }
     }
 
-    // --- DIALOGOS ---
+    // --- ESCUCHAR REDIRECCIÓN AUTOMÁTICA A TRANSFERENCIA ---
+    LaunchedEffect(Unit) {
+        agregarViewModel.redireccionTransferencia.collect { textoVoz ->
+            // -1 porque es una NUEVA transferencia
+            onNavegarTransferencia(-1, textoVoz)
+        }
+    }
 
+    // --- DIALOGOS ---
     if (mostrarSelectorRango) {
         val datePickerState = rememberDateRangePickerState()
         DatePickerDialog(
@@ -136,7 +138,6 @@ fun HomeScreen(
         else -> {}
     }
 
-    // Dialogo Detalle
     if (mostrarDetalle && transaccionSeleccionada != null) {
         val t = transaccionSeleccionada!!
         val nombreCuenta = cuentas.find { it.id == t.cuentaId }?.nombre ?: "Cuenta"
@@ -144,11 +145,11 @@ fun HomeScreen(
             transaccion = t,
             nombreCuenta = nombreCuenta,
             onDismiss = { mostrarDetalle = false },
-            onDelete = { mostrarConfirmacionBorrar = true }, // Llama a confirmación
+            onDelete = { mostrarConfirmacionBorrar = true },
             onEdit = {
                 mostrarDetalle = false
                 if (t.categoria == "Transferencia") {
-                    onNavegarTransferencia(t.id)
+                    onNavegarTransferencia(t.id, null) // Edición normal (sin texto de voz)
                 } else {
                     onNavegarEditar(t.id)
                 }
@@ -156,7 +157,6 @@ fun HomeScreen(
         )
     }
 
-    // Confirmación Borrar
     if (mostrarConfirmacionBorrar && transaccionSeleccionada != null) {
         AlertDialog(
             onDismissRequest = { mostrarConfirmacionBorrar = false },
@@ -166,7 +166,6 @@ fun HomeScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        // Si es transferencia, el repositorio se encarga de borrar la pareja si se implementó así
                         viewModel.borrarTransaccion(transaccionSeleccionada!!)
                         mostrarConfirmacionBorrar = false
                         mostrarDetalle = false
@@ -223,9 +222,9 @@ fun HomeScreen(
                         containerColor = fabMenuBackground, contentColor = fabMenuContent
                     ) { Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.Mic, null, tint = fabMenuIconColor); Spacer(Modifier.width(8.dp)); Text("Voz", fontWeight = FontWeight.Bold) } }
 
-                    // Transferencia
+                    // Transferencia (Botón manual)
                     SmallFloatingActionButton(
-                        onClick = { mostrarMenuAgregar = false; onNavegarTransferencia(-1) },
+                        onClick = { mostrarMenuAgregar = false; onNavegarTransferencia(-1, null) },
                         containerColor = fabMenuBackground, contentColor = fabMenuContent
                     ) { Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.SwapHoriz, null, tint = fabMenuIconColor); Spacer(Modifier.width(8.dp)); Text("Transferencia", fontWeight = FontWeight.Bold) } }
 
@@ -248,6 +247,7 @@ fun HomeScreen(
                     ) { Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.ArrowDownward, null, tint = MaterialTheme.colorScheme.error); Spacer(Modifier.width(8.dp)); Text("Gasto", fontWeight = FontWeight.Bold) } }
                 }
 
+                // Botón Principal
                 Surface(
                     shape = FloatingActionButtonDefaults.shape,
                     color = MaterialTheme.colorScheme.primary,
@@ -259,7 +259,7 @@ fun HomeScreen(
                                 0 -> mostrarMenuAgregar = !mostrarMenuAgregar
                                 1 -> onNavegarAgregar(false)
                                 2 -> onNavegarAgregar(true)
-                                3 -> onNavegarTransferencia(-1)
+                                3 -> onNavegarTransferencia(-1, null) // Manual
                             }
                         },
                         onLongClick = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) }
@@ -307,7 +307,6 @@ fun HomeScreen(
 
                         item { Text("Últimos Movimientos", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp)) }
 
-                        // FILTRO PARA INICIO: Ocultar parte de entrada de transferencias
                         val ultimos = listaTransacciones.filter {
                             !(it.categoria == "Transferencia" && it.esIngreso)
                         }.take(6)
@@ -320,7 +319,7 @@ fun HomeScreen(
                                     transaccion = t,
                                     nombreCuentaOrigen = nombreCuenta,
                                     onItemClick = { transaccionSeleccionada = t; mostrarDetalle = true },
-                                    onEdit = { onNavegarTransferencia(t.id) },
+                                    onEdit = { onNavegarTransferencia(t.id, null) },
                                     onDelete = {
                                         transaccionSeleccionada = t
                                         mostrarConfirmacionBorrar = true
@@ -345,7 +344,7 @@ fun HomeScreen(
                         }
                     }
 
-                    1, 2, 3 -> { // TABS ESPECÍFICOS
+                    1, 2, 3 -> { // GASTOS, INGRESOS, TRANSFERENCIAS
                         item {
                             Box(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)) {
                                 val tituloFiltro = when(filtroTiempo) {
@@ -358,7 +357,14 @@ fun HomeScreen(
                                 Text(text = tituloFiltro, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Center))
                                 Box(modifier = Modifier.align(Alignment.CenterEnd)) {
                                     Box(
-                                        modifier = Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).combinedClickable(onClick = { mostrarMenuFiltro = true }, onLongClick = { mostrarSelectorRango = true }).padding(8.dp)
+                                        modifier = Modifier
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                                            .combinedClickable(
+                                                onClick = { mostrarMenuFiltro = true },
+                                                onLongClick = { mostrarSelectorRango = true }
+                                            )
+                                            .padding(8.dp)
                                     ) { Icon(Icons.Default.DateRange, null, tint = MaterialTheme.colorScheme.primary) }
 
                                     DropdownMenu(expanded = mostrarMenuFiltro, onDismissRequest = { mostrarMenuFiltro = false }) {
@@ -372,7 +378,6 @@ fun HomeScreen(
                             }
                         }
 
-                        // LÓGICA DE FILTRADO
                         val listaFiltrada = when(page) {
                             1 -> listaTransacciones.filter { !it.esIngreso && it.categoria != "Transferencia" }
                             2 -> listaTransacciones.filter { it.esIngreso && it.categoria != "Transferencia" }
@@ -380,25 +385,21 @@ fun HomeScreen(
                             else -> emptyList()
                         }
 
-                        // --- GRÁFICAS ---
                         item {
                             if (listaFiltrada.isNotEmpty()) {
                                 Box(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp), contentAlignment = Alignment.Center) {
                                     if (page == 3) {
-                                        // GRÁFICA POR CUENTA (Transferencias)
                                         val datosCuentas = listaFiltrada.groupBy { t ->
                                             cuentas.find { it.id == t.cuentaId }?.nombre ?: "Desconocida"
                                         }.mapValues { entry -> entry.value.sumOf { it.monto } }
                                         DonutChartGeneric(datos = datosCuentas, size = 200.dp)
                                     } else {
-                                        // GRÁFICA POR CATEGORÍA (Normal)
                                         DonutChart(transacciones = listaFiltrada, size = 200.dp)
                                     }
                                 }
                             }
                         }
 
-                        // LISTA
                         val agrupado = listaFiltrada.groupBy { DateUtils.formatearFechaAmigable(it.fecha) }
                         agrupado.forEach { (f, ts) ->
                             item { Text(f, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth(), textAlign = TextAlign.Center) }
@@ -409,7 +410,7 @@ fun HomeScreen(
                                         transaccion = t,
                                         nombreCuentaOrigen = nombreCuenta,
                                         onItemClick = { transaccionSeleccionada = t; mostrarDetalle = true },
-                                        onEdit = { onNavegarTransferencia(t.id) },
+                                        onEdit = { onNavegarTransferencia(t.id, null) },
                                         onDelete = {
                                             transaccionSeleccionada = t
                                             mostrarConfirmacionBorrar = true
@@ -485,11 +486,10 @@ fun ItemTransferencia(
     val nombreDestino = transaccion.notaCompleta.replace("Transferencia a ", "")
     var mostrarMenu by remember { mutableStateOf(false) }
 
-    // Colores
     val textColor = MaterialTheme.colorScheme.onBackground
     val iconBgColor = MaterialTheme.colorScheme.surfaceVariant
     val arrowColor = MaterialTheme.colorScheme.outline
-    val montoColor = Color(0xFF2979FF) // Azul
+    val montoColor = Color(0xFF2979FF)
     val subTextColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     Box(
@@ -508,9 +508,7 @@ fun ItemTransferencia(
             Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(iconBgColor), contentAlignment = Alignment.Center) {
                 Icon(imageVector = Icons.Default.SwapHoriz, contentDescription = null, tint = textColor)
             }
-
             Spacer(modifier = Modifier.width(16.dp))
-
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(text = nombreCuentaOrigen, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = textColor)
@@ -519,10 +517,8 @@ fun ItemTransferencia(
                     PaddingValues(horizontal = 4.dp)
                     Text(text = nombreDestino, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = textColor)
                 }
-                // Etiqueta "Transferencia" en lugar de fecha
                 Text(text = "Transferencia", style = MaterialTheme.typography.bodySmall, color = subTextColor)
             }
-
             Text(
                 text = "-${CurrencyUtils.formatCurrency(transaccion.monto)}",
                 style = MaterialTheme.typography.titleMedium,
@@ -536,10 +532,10 @@ fun ItemTransferencia(
             DropdownMenuItem(text = { Text("Eliminar") }, onClick = { mostrarMenu = false; onDelete() }, leadingIcon = { Icon(Icons.Default.Delete, null) })
         }
     }
-    // Separador sutil
     Divider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), thickness = 0.5.dp)
 }
 
+// ... Resto de Dialogos (Detalle, Escuchando, etc) sin cambios ...
 @Composable
 fun DetalleTransaccionDialog(transaccion: TransaccionEntity, nombreCuenta: String, onDismiss: () -> Unit, onDelete: () -> Unit, onEdit: () -> Unit) {
     AlertDialog(
@@ -602,8 +598,5 @@ fun CardProgresoAhorro(nombre: String, ahorrado: Double, meta: Double) {
 @Composable
 fun DialogoEditarSaldo(saldoActual: Double, onDismiss: () -> Unit, onConfirm: (Double) -> Unit) {
     var texto by remember { mutableStateOf(saldoActual.toString()) }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text("Ajustar Saldo Base") }, text = { OutlinedTextField(value = texto, onValueChange = { texto = it }, label = { Text("Saldo Inicial ($)") }, keyboardOptions = KeyboardOptions(
-        keyboardType = KeyboardType.Number
-    )
-    ) }, confirmButton = { Button(onClick = { val n = texto.toDoubleOrNull(); if (n != null) onConfirm(n) }) { Text("Guardar") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } })
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("Ajustar Saldo Base") }, text = { OutlinedTextField(value = texto, onValueChange = { texto = it }, label = { Text("Saldo Inicial ($)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)) }, confirmButton = { Button(onClick = { val n = texto.toDoubleOrNull(); if (n != null) onConfirm(n) }) { Text("Guardar") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } })
 }

@@ -20,7 +20,6 @@ import com.example.gastocheck.ui.theme.screens.cuentas.*
 import com.example.gastocheck.ui.theme.screens.historial.HistorialScreen
 import com.example.gastocheck.ui.theme.screens.home.HomeScreen
 import com.example.gastocheck.ui.theme.screens.metas.MetasScreen
-import com.example.gastocheck.ui.theme.screens.voz.ConfirmacionVozScreen
 import com.example.gastocheck.ui.theme.screens.transferencia.RegistrarTransferenciaScreen
 
 @Composable
@@ -29,7 +28,7 @@ fun AppNavigation() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // --- INSTANCIA COMPARTIDA DEL VIEWMODEL ---
+    // --- INSTANCIA COMPARTIDA DEL VIEWMODEL (Para manejar la voz desde el Home) ---
     val sharedAgregarViewModel: AgregarViewModel = hiltViewModel()
 
     val rutasConBarra = listOf("home", "cuentas_lista", "metas")
@@ -95,16 +94,20 @@ fun AppNavigation() {
                         navController.navigate("agregar?id=$id&vieneDeVoz=false")
                     },
                     onNavegarMetas = { navController.navigate("metas") },
-                    // --- NUEVO: Conectamos la navegación al historial ---
                     onNavegarHistorial = { accountId ->
                         navController.navigate("historial/$accountId")
                     },
                     onVozDetectada = { esIngresoDetectado ->
                         navController.navigate("agregar?id=-1&esIngreso=$esIngresoDetectado&vieneDeVoz=true")
                     },
-                    // --- CORRECCIÓN AQUÍ: ACEPTAR ID PARA EDITAR ---
-                    onNavegarTransferencia = { id ->
-                        navController.navigate("registrar_transferencia?id=$id")
+                    // --- ACTUALIZADO: ACEPTA ID Y TEXTO DE VOZ OPCIONAL ---
+                    onNavegarTransferencia = { id, textoVoz ->
+                        val ruta = if (textoVoz != null) {
+                            "registrar_transferencia?id=$id&textoAudio=$textoVoz"
+                        } else {
+                            "registrar_transferencia?id=$id"
+                        }
+                        navController.navigate(ruta)
                     }
                 )
             }
@@ -132,30 +135,31 @@ fun AppNavigation() {
                 )
             }
 
-            // --- RUTA TRANSFERENCIA ACTUALIZADA (Soporta ID opcional) ---
+            // --- RUTA TRANSFERENCIA ACTUALIZADA (Soporta ID y Texto Audio) ---
             composable(
-                route = "registrar_transferencia?id={id}",
+                route = "registrar_transferencia?id={id}&textoAudio={textoAudio}",
                 arguments = listOf(
-                    navArgument("id") { type = NavType.IntType; defaultValue = -1 }
+                    navArgument("id") { type = NavType.IntType; defaultValue = -1 },
+                    navArgument("textoAudio") { type = NavType.StringType; nullable = true; defaultValue = null }
                 )
             ) { backStackEntry ->
                 val id = backStackEntry.arguments?.getInt("id") ?: -1
+                val textoAudio = backStackEntry.arguments?.getString("textoAudio")
+
                 RegistrarTransferenciaScreen(
-                    idTransaccion = id, // Pasamos el ID a la pantalla
+                    idTransaccion = id,
+                    textoInicial = textoAudio, // Pasamos el texto detectado
                     onBack = { navController.popBackStack() }
                 )
             }
 
-            // --- RUTA HISTORIAL ---
             composable(
                 "historial/{accountId}",
                 arguments = listOf(navArgument("accountId") { type = NavType.IntType })
             ) {
-                // El ViewModel de Historial obtendrá el accountId automáticamente del SavedStateHandle
                 HistorialScreen(onBack = { navController.popBackStack() })
             }
 
-            // --- RUTA AGREGAR ---
             composable(
                 route = "agregar?id={id}&esIngreso={esIngreso}&vieneDeVoz={vieneDeVoz}",
                 arguments = listOf(

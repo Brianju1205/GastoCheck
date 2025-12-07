@@ -1,8 +1,11 @@
 package com.example.gastocheck.ui.theme.screens.transferencia
 
+import android.Manifest
 import android.app.DatePickerDialog
 import android.widget.DatePicker
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,6 +26,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.gastocheck.ui.theme.components.DialogoProcesando
+import com.example.gastocheck.ui.theme.screens.home.DialogoEscuchandoAnimado
+import com.example.gastocheck.ui.theme.screens.transferencia.TransferenciaViewModel.EstadoVoz
 import com.example.gastocheck.ui.theme.util.DateUtils
 import java.util.Calendar
 
@@ -30,21 +36,32 @@ import java.util.Calendar
 @Composable
 fun RegistrarTransferenciaScreen(
     idTransaccion: Int = -1,
+    textoInicial: String? = null, // <--- Recibe el texto de la voz del Home
     viewModel: TransferenciaViewModel = hiltViewModel(),
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
 
-    // --- ESCUCHAR ERRORES ---
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+        if (isGranted) viewModel.iniciarEscuchaInteligente()
+        else Toast.makeText(context, "Se requiere permiso para usar voz", Toast.LENGTH_SHORT).show()
+    }
+
     LaunchedEffect(Unit) {
         viewModel.uiEvent.collect { mensaje ->
             Toast.makeText(context, mensaje, Toast.LENGTH_SHORT).show()
         }
     }
 
-    // Inicializamos al cargar
     LaunchedEffect(idTransaccion) {
         viewModel.inicializar(idTransaccion)
+    }
+
+    // --- PROCESAR TEXTO DEL HOME ---
+    LaunchedEffect(textoInicial) {
+        if (!textoInicial.isNullOrBlank()) {
+            viewModel.procesarTextoExterno(textoInicial)
+        }
     }
 
     val cuentas by viewModel.cuentas.collectAsState()
@@ -53,8 +70,8 @@ fun RegistrarTransferenciaScreen(
     val monto by viewModel.monto.collectAsState()
     val nota by viewModel.nota.collectAsState()
     val fecha by viewModel.fecha.collectAsState()
+    val estadoVoz by viewModel.estadoVoz.collectAsState()
 
-    // --- COLORES DEL TEMA ---
     val primaryColor = MaterialTheme.colorScheme.primary
     val backgroundColor = MaterialTheme.colorScheme.background
     val surfaceVariantColor = MaterialTheme.colorScheme.surfaceVariant
@@ -79,12 +96,17 @@ fun RegistrarTransferenciaScreen(
         calendar.get(Calendar.DAY_OF_MONTH)
     )
 
-    // Inicializar ids por defecto solo si es NUEVA y no se han seleccionado
     LaunchedEffect(cuentas) {
-        if (idTransaccion == -1) {
+        if (idTransaccion == -1 && textoInicial.isNullOrBlank()) {
             if (viewModel.origenId.value == -1 && cuentas.isNotEmpty()) viewModel.setOrigen(cuentas.first().id)
             if (viewModel.destinoId.value == -1 && cuentas.size > 1) viewModel.setDestino(cuentas[1].id)
         }
+    }
+
+    when (estadoVoz) {
+        is EstadoVoz.Escuchando -> DialogoEscuchandoAnimado(onDismiss = { viewModel.reiniciarEstadoVoz() })
+        is EstadoVoz.ProcesandoIA -> DialogoProcesando()
+        else -> {}
     }
 
     Scaffold(
@@ -103,9 +125,7 @@ fun RegistrarTransferenciaScreen(
                         Icon(Icons.Default.Close, null, tint = onBackgroundColor)
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = backgroundColor
-                )
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = backgroundColor)
             )
         }
     ) { padding ->
@@ -116,8 +136,6 @@ fun RegistrarTransferenciaScreen(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-
-            // --- SELECTORES DE CUENTA ---
             Text("Cuenta Origen", color = onSurfaceVariantColor, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp))
             CuentaSelector(
                 nombre = cuentas.find { it.id == origenId }?.nombre ?: "Seleccionar",
@@ -144,7 +162,6 @@ fun RegistrarTransferenciaScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // --- MONTO ---
             Text("Monto", color = onSurfaceVariantColor)
             BasicTextField(
                 value = monto,
@@ -163,15 +180,20 @@ fun RegistrarTransferenciaScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // --- EXTRAS (Nota y Fecha) ---
             Card(colors = CardDefaults.cardColors(containerColor = surfaceVariantColor), shape = RoundedCornerShape(12.dp)) {
                 Column {
-                    Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Icon(Icons.Default.Edit, null, tint = primaryColor)
                         Spacer(modifier = Modifier.width(16.dp))
                         Box(modifier = Modifier.weight(1f)) {
                             if (nota.isEmpty()) Text("Añadir nota (opcional)", color = onSurfaceVariantColor.copy(alpha = 0.7f))
                             BasicTextField(value = nota, onValueChange = { viewModel.onNotaChange(it) }, textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp), cursorBrush = SolidColor(primaryColor))
+                        }
+                        IconButton(onClick = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) }) {
+                            Icon(Icons.Default.Mic, contentDescription = "Dictar", tint = primaryColor)
                         }
                     }
                     Divider(color = backgroundColor, thickness = 1.dp)
@@ -186,7 +208,6 @@ fun RegistrarTransferenciaScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // --- BOTÓN ---
             Button(
                 onClick = { viewModel.realizarTransferencia { onBack() } },
                 modifier = Modifier.fillMaxWidth().height(56.dp),

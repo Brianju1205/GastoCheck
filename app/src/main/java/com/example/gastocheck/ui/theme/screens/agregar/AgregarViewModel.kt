@@ -13,6 +13,7 @@ import com.example.gastocheck.ui.theme.util.NotaUtils
 import com.example.gastocheck.ui.theme.util.VoiceRecognizer
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.Date
@@ -43,7 +44,6 @@ class AgregarViewModel @Inject constructor(
     private val _fecha = MutableStateFlow(Date())
     val fecha = _fecha.asStateFlow()
 
-    // CORRECCIÓN: Restauramos el estado 'esMeta' que faltaba y causaba el error
     private val _esMeta = MutableStateFlow(false)
     val esMeta = _esMeta.asStateFlow()
 
@@ -57,6 +57,10 @@ class AgregarViewModel @Inject constructor(
     // --- ESTADOS VOZ ---
     private val _estadoVoz = MutableStateFlow<EstadoVoz>(EstadoVoz.Inactivo)
     val estadoVoz = _estadoVoz.asStateFlow()
+
+    // --- NUEVO: CANAL PARA REDIRECCIÓN ---
+    private val _redireccionTransferencia = Channel<String>()
+    val redireccionTransferencia = _redireccionTransferencia.receiveAsFlow()
 
     private var currentId: Int = -1
 
@@ -89,7 +93,7 @@ class AgregarViewModel @Inject constructor(
         _descripcion.value = ""
         _categoria.value = "Otros"
         _fecha.value = Date()
-        _esMeta.value = false // Limpiamos meta también
+        _esMeta.value = false
     }
 
     private fun cargarTransaccion(id: Int) {
@@ -146,7 +150,6 @@ class AgregarViewModel @Inject constructor(
         }
     }
 
-    // CORRECCIÓN: Restauramos la función pública 'procesarVoz' que llama ConfirmacionVozScreen
     fun procesarVoz(texto: String) {
         if (texto.isBlank()) return
         procesarTextoHibrido(texto)
@@ -159,14 +162,22 @@ class AgregarViewModel @Inject constructor(
                 val interpretacion = geminiRepository.interpretarTexto(texto)
 
                 if (interpretacion != null) {
+
+                    // --- DETECCIÓN CLAVE: SI ES TRANSFERENCIA, REDIRIGIR ---
+                    if (interpretacion.tipo.equals("TRANSFERENCIA", ignoreCase = true)) {
+                        _estadoVoz.value = EstadoVoz.Inactivo
+                        // Enviamos el texto original para que la otra pantalla lo procese
+                        _redireccionTransferencia.send(texto)
+                        return@launch
+                    }
+
+                    // --- SI NO, CONTINUAMOS COMO GASTO/INGRESO NORMAL ---
                     _monto.value = interpretacion.monto.toString()
                     _descripcion.value = interpretacion.descripcion
                     _categoria.value = interpretacion.categoria
 
                     val detectadoEsIngreso = interpretacion.tipo.uppercase() == "INGRESO"
                     _esIngreso.value = detectadoEsIngreso
-
-                    // Lógica simple para detectar Meta si la IA no lo devuelve explícitamente
                     _esMeta.value = texto.contains("meta", ignoreCase = true) || texto.contains("ahorro", ignoreCase = true)
 
                     var cuentaEncontrada = cuentas.value.find {
@@ -194,9 +205,17 @@ class AgregarViewModel @Inject constructor(
 
     private fun procesarVozLocal(texto: String) {
         val textoLower = texto.lowercase()
-        val esIngresoDetectado = textoLower.contains("ingreso") || textoLower.contains("gané")
 
-        // Detectar Meta localmente
+        // Detección local básica de transferencia si falla internet
+        if (textoLower.contains("transfer") || textoLower.contains("pasar a")) {
+            viewModelScope.launch {
+                _estadoVoz.value = EstadoVoz.Inactivo
+                _redireccionTransferencia.send(texto)
+            }
+            return
+        }
+
+        val esIngresoDetectado = textoLower.contains("ingreso") || textoLower.contains("gané")
         val esMetaDetectada = textoLower.contains("meta") || textoLower.contains("ahorro")
 
         _esIngreso.value = esIngresoDetectado
@@ -254,8 +273,6 @@ class AgregarViewModel @Inject constructor(
     fun guardarTransaccion(onGuardadoExitoso: () -> Unit) {
         val montoVal = _monto.value.toDoubleOrNull() ?: 0.0
         val notaCompletaFinal = if (_descripcion.value.isBlank()) _categoria.value else _descripcion.value
-
-        // Generamos el resumen
         val notaResumenGenerada = NotaUtils.generarResumen(notaCompletaFinal, _categoria.value)
 
         if (montoVal > 0) {

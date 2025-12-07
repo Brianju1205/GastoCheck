@@ -5,12 +5,10 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import javax.inject.Inject
 
-// 1. ACTUALIZAMOS LA ESTRUCTURA DE DATOS
-// Ahora incluye cuentas para soportar transferencias y lógica avanzada
-
 class GeminiRepository @Inject constructor() {
 
-    private val apiKey = "AIzaSyDdWq_ThblXwWLz7Gv4U-imbmfxvvHvJ-g" // Tu API Key
+    // Asegúrate de que tu API Key sea válida
+    private val apiKey = "AIzaSyDdWq_ThblXwWLz7Gv4U-imbmfxvvHvJ-g"
 
     private val api = Retrofit.Builder()
         .baseUrl("https://generativelanguage.googleapis.com/")
@@ -19,40 +17,36 @@ class GeminiRepository @Inject constructor() {
         .create(GeminiApi::class.java)
 
     suspend fun interpretarTexto(texto: String): TransaccionInterpretada? {
-        // 2. PROMPT AVANZADO (Ingeniería de Prompts)
+        // --- MEJORA DEL PROMPT ---
         val prompt = """
-            Eres un asistente financiero experto. Analiza el texto: "$texto".
+            Eres un asistente financiero inteligente. Tu trabajo es extraer datos de una frase dicha por el usuario para una App de Finanzas.
             
-            Tu objetivo es extraer datos estructurados para una App de finanzas.
+            Frase del usuario: "$texto"
             
-            REGLAS DE ANÁLISIS:
-            1. **Tipo**: 
-               - Si dice "transferir", "pasar", "mover", "enviar" -> "TRANSFERENCIA".
-               - Si dice "ahorrar", "meta", "guardar para" -> "META".
-               - Si implica entrada de dinero ("gané", "recibí", "depósito") -> "INGRESO".
-               - Cualquier otra salida de dinero -> "GASTO".
+            INSTRUCCIONES DE ANÁLISIS:
+            1. **Tipo**:
+               - Si la frase menciona "transferir", "pasar a", "enviar a", "moví a" o implica movimiento entre dos cuentas propias (ej: "de Bancomer a Efectivo"), el tipo ES OBLIGATORIAMENTE "TRANSFERENCIA".
+               - Si dice "ahorrar", "guardar para", "meta" -> "META".
+               - Si recibí dinero -> "INGRESO".
+               - Si gasté dinero -> "GASTO".
             
-            2. **Cuentas (Origen y Destino)**:
-               - Busca nombres de cuentas como: "Banco", "Tarjeta", "Nomina", "Ahorros", "BBVA", "Santander".
-               - Regla de Oro: Si NO se menciona ninguna cuenta, asume "Efectivo".
-               - Si es GASTO: 'cuenta_origen' es la cuenta usada.
-               - Si es INGRESO: 'cuenta_origen' es donde entra el dinero.
-               - Si es TRANSFERENCIA: Identifica 'cuenta_origen' (desde) y 'cuenta_destino' (hacia).
+            2. **Cuentas**:
+               - Detecta nombres de cuentas (ej: Efectivo, Bancomer, BBVA, Santander, Nomina, Ahorros, Tarjeta, Nu).
+               - Si es "TRANSFERENCIA": Debes identificar AMBAS. 'cuenta_origen' (de donde sale) y 'cuenta_destino' (a donde llega).
+               - Si es GASTO/INGRESO: Solo identifica 'cuenta_origen'.
             
-            3. **Monto**: Extrae el número. Si hay varios, usa el que parezca el total.
+            3. **Monto**: Extrae el número principal.
             
-            4. **Categoría**: Clasifica en una sola palabra (ej. Comida, Transporte, Salud, Ocio, Servicios, Casa).
-            
-            5. **Descripción**: Resumen muy breve (máx 5 palabras).
+            4. **Descripción**: Un resumen muy breve (máx 5 palabras). Si no hay detalle, usa "Transferencia".
 
-            Responde ÚNICAMENTE con este JSON:
+            Responde SOLO con este JSON (sin markdown, sin explicaciones):
             {
-              "tipo": "GASTO", 
+              "tipo": "TRANSFERENCIA", 
               "monto": 0.0,
               "categoria": "Otros",
               "descripcion": "Texto breve",
-              "cuenta_origen": "Efectivo",
-              "cuenta_destino": null
+              "cuenta_origen": "NombreCuentaOrigen",
+              "cuenta_destino": "NombreCuentaDestino"
             }
         """.trimIndent()
 
@@ -63,7 +57,12 @@ class GeminiRepository @Inject constructor() {
             val jsonString = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
 
             if (jsonString != null) {
-                val jsonLimpio = jsonString.replace("```json", "").replace("```", "").trim()
+                // Limpieza robusta por si Gemini devuelve bloques de código ```json ... ```
+                val jsonLimpio = jsonString
+                    .replace("```json", "")
+                    .replace("```", "")
+                    .trim()
+
                 Gson().fromJson(jsonLimpio, TransaccionInterpretada::class.java)
             } else {
                 null
