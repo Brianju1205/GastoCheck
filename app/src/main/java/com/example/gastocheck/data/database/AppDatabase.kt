@@ -23,7 +23,7 @@ import com.example.gastocheck.data.database.entity.VozPendienteEntity
         CuentaEntity::class,
         BalanceSnapshotEntity::class // <--- 1. Asegúrate de que esta entidad esté aquí
     ],
-    version = 6, // <--- 2. Asegúrate de que la versión sea 6 (o superior a la que tenías)
+    version = 7, // <--- 2. Asegúrate de que la versión sea 6 (o superior a la que tenías)
     exportSchema = false
 )
 @TypeConverters(Converters::class)

@@ -8,8 +8,9 @@ data class CuentaEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
     val nombre: String,
-    val tipo: String, // Ej: "Efectivo", "Débito", "Crédito"
+    val tipo: String,
     val saldoInicial: Double,
-    val colorHex: String = "#00E676", // Color para UI
+    val colorHex: String = "#00E676",
+    val icono: String = "Wallet", // <--- NUEVO CAMPO
     val esArchivada: Boolean = false
 )

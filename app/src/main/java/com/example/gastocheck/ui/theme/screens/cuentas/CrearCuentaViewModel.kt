@@ -67,7 +67,8 @@ class CrearCuentaViewModel @Inject constructor(
                     nombre = nombreVal,
                     tipo = _tipo.value,
                     saldoInicial = saldoVal,
-                    colorHex = _colorSeleccionado.value
+                    colorHex = _colorSeleccionado.value,
+                    icono = _iconoSeleccionado.value
                     // Nota: Si agregas campo 'icono' a la entidad Cuenta, úsalo aquí.
                     // Por ahora guardamos lo básico.
                 )

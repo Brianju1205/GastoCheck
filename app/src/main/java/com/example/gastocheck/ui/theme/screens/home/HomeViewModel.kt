@@ -14,8 +14,14 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-// Agregamos RANGO al enum
+// Enum para los filtros de tiempo
 enum class FiltroTiempo { DIA, SEMANA, MES, ANIO, RANGO }
+
+// Modelo de datos para la UI de Cuentas (Incluye el saldo calculado)
+data class CuentaUiState(
+    val cuenta: CuentaEntity,
+    val saldoActual: Double
+)
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
@@ -33,8 +39,33 @@ class HomeViewModel @Inject constructor(
     private val _rangoFechas = MutableStateFlow<Pair<Long, Long>?>(null)
     val rangoFechas = _rangoFechas.asStateFlow()
 
+    // Lista simple de cuentas (Base de datos directa)
     val cuentas: StateFlow<List<CuentaEntity>> = repository.getCuentas()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // --- NUEVO: LISTA DE CUENTAS CON SALDO CALCULADO ---
+    // Combina las cuentas y todas las transacciones para calcular el saldo real en vivo
+    val cuentasConSaldo: StateFlow<List<CuentaUiState>> = combine(
+        repository.getCuentas(),
+        repository.getTransaccionesGlobales()
+    ) { listaCuentas, listaTransacciones ->
+        listaCuentas.map { cuenta ->
+            // Sumar Ingresos de esta cuenta
+            val ingresos = listaTransacciones
+                .filter { it.cuentaId == cuenta.id && it.esIngreso }
+                .sumOf { it.monto }
+
+            // Sumar Gastos de esta cuenta
+            val gastos = listaTransacciones
+                .filter { it.cuentaId == cuenta.id && !it.esIngreso }
+                .sumOf { it.monto }
+
+            // Saldo = Inicial + Ingresos - Gastos
+            val total = cuenta.saldoInicial + ingresos - gastos
+
+            CuentaUiState(cuenta, total)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val metas: StateFlow<List<MetaEntity>> = metaDao.getMetas()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -119,9 +150,14 @@ class HomeViewModel @Inject constructor(
         _filtroTiempo.value = FiltroTiempo.RANGO
     }
 
+    // Borrado inteligente (Maneja transferencias completas)
     fun borrarTransaccion(transaccion: TransaccionEntity) {
         viewModelScope.launch {
-            repository.deleteTransaccion(transaccion)
+            if (transaccion.categoria == "Transferencia") {
+                repository.eliminarTransferenciaCompleta(transaccion.id)
+            } else {
+                repository.deleteTransaccion(transaccion)
+            }
         }
     }
 }
