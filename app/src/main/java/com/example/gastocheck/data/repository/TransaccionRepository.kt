@@ -16,12 +16,16 @@ interface TransaccionRepository {
     suspend fun getTransaccionById(id: Int): TransaccionEntity?
     suspend fun getCuentaById(id: Int): CuentaEntity?
 
-    // --- NUEVO: Obtener la transacción pareja para poder cargarla al editar ---
+    // --- NUEVO: Obtener la transacción pareja ---
     suspend fun getTransaccionPareja(transaccion: TransaccionEntity): TransaccionEntity?
 
     suspend fun insertTransaccion(transaccion: TransaccionEntity)
     suspend fun insertCuenta(cuenta: CuentaEntity)
     suspend fun deleteTransaccion(transaccion: TransaccionEntity)
+
+    // --- NUEVO: Borrar cuenta ---
+    suspend fun deleteCuenta(cuenta: CuentaEntity)
+
     suspend fun eliminarTransferenciaCompleta(id: Int)
     suspend fun realizarTransferencia(origenId: Int, destinoId: Int, monto: Double, fecha: Date)
 }

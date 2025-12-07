@@ -7,173 +7,148 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.gastocheck.data.database.entity.TransaccionEntity
 import com.example.gastocheck.ui.theme.util.CategoriaUtils
 import com.example.gastocheck.ui.theme.util.CurrencyUtils
+import com.example.gastocheck.ui.theme.util.IconoUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetalleCuentaScreen(
-    accountId: Int, // Se usa en el ViewModel internamente
+    accountId: Int,
     viewModel: DetalleCuentaViewModel = hiltViewModel(),
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onEditar: (Int) -> Unit, // Callback para editar
+    onVerTodos: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsState()
+    var mostrarConfirmacionBorrar by remember { mutableStateOf(false) }
 
-    // COLORES PERSONALIZADOS SEGÚN IMAGEN
-    val BackgroundDark = Color(0xFF0D1611) // Fondo casi negro verdoso
-    val CardBackground = Color(0xFF15201A) // Fondo de tarjeta un poco mas claro
-    val PrimaryGreen = Color(0xFF00E676)   // Verde neón
-    val TextWhite = Color.White
-    val TextGrey = Color(0xFFB0BEC5)
-    val ExpenseRed = Color(0xFFEF5350)
+    // --- COLORES ---
+    val backgroundColor = MaterialTheme.colorScheme.background
+    val cardColor = MaterialTheme.colorScheme.surfaceVariant
+    val textColor = MaterialTheme.colorScheme.onBackground
+    val subTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val errorColor = MaterialTheme.colorScheme.error
+
+    LaunchedEffect(state.cuenta) {
+        if (state.cuenta == null && accountId != -1) { /* onBack() */ }
+    }
+
+    if (mostrarConfirmacionBorrar) {
+        AlertDialog(
+            onDismissRequest = { mostrarConfirmacionBorrar = false },
+            icon = { Icon(Icons.Default.Warning, null, tint = errorColor) },
+            title = { Text("¿Eliminar cuenta?") },
+            text = { Text("Se eliminarán también todos los movimientos de esta cuenta. Esta acción no se puede deshacer.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.borrarCuentaActual { onBack() }
+                        mostrarConfirmacionBorrar = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = errorColor)
+                ) { Text("Eliminar") }
+            },
+            dismissButton = { TextButton(onClick = { mostrarConfirmacionBorrar = false }) { Text("Cancelar") } }
+        )
+    }
 
     Scaffold(
-        containerColor = BackgroundDark,
+        containerColor = backgroundColor,
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    Text(
-                        text = "Cuenta: ${state.cuenta?.nombre ?: "Cargando..."}",
-                        color = TextWhite,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Atrás", tint = TextWhite)
+                    // --- TÍTULO CON ICONO Y COLOR DE LA CUENTA ---
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (state.cuenta != null) {
+                            val colorCuenta = try { Color(android.graphics.Color.parseColor(state.cuenta!!.colorHex)) } catch(e:Exception){ primaryColor }
+                            val icono = IconoUtils.getIconoByName(state.cuenta!!.icono)
+
+                            Icon(imageVector = icono, contentDescription = null, tint = colorCuenta, modifier = Modifier.size(24.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = state.cuenta!!.nombre,
+                                color = textColor,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        } else {
+                            Text("Cargando...", color = textColor)
+                        }
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = BackgroundDark
-                )
+                navigationIcon = {
+                    IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Atrás", tint = textColor) }
+                },
+                // --- BOTONES DE EDITAR Y ELIMINAR EN LA BARRA ---
+                actions = {
+                    IconButton(onClick = { state.cuenta?.let { onEditar(it.id) } }) {
+                        Icon(Icons.Default.Edit, "Editar", tint = textColor)
+                    }
+                    IconButton(onClick = { mostrarConfirmacionBorrar = true }) {
+                        Icon(Icons.Default.Delete, "Eliminar", tint = errorColor)
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = backgroundColor)
             )
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize()
+        LazyColumn(
+            modifier = Modifier.padding(padding).fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            // --- SECCIÓN SUPERIOR (TARJETA DE BALANCE) ---
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = CardBackground)
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text("Balance actual", color = TextGrey, fontSize = 14.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = CurrencyUtils.formatCurrency(state.saldoActual),
-                        color = TextWhite,
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    // Sección "Te queda para gastar hoy"
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column {
-                            Text("Te queda para gastar hoy", color = TextGrey, fontSize = 12.sp)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = CurrencyUtils.formatCurrency(state.presupuestoDiario),
-                                color = TextWhite,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        // Icono de bolsa
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(PrimaryGreen.copy(alpha = 0.1f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ShoppingBag,
-                                contentDescription = null,
-                                tint = PrimaryGreen
-                            )
-                        }
+            // 1. TARJETA DE SALDO
+            item {
+                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = cardColor)) {
+                    Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Saldo disponible", color = subTextColor, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(text = CurrencyUtils.formatCurrency(state.saldoActual), color = textColor, fontSize = 40.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
 
-            // --- TÍTULO LISTA ---
-            Text(
-                text = "Movimientos de esta cuenta",
-                color = TextWhite,
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
+            // 2. LISTA DE MOVIMIENTOS
+            item {
+                Text("Últimos movimientos", color = textColor, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
 
-            // --- LISTA DE MOVIMIENTOS ---
-            LazyColumn(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                items(state.transacciones) { transaccion ->
-                    ItemMovimientoCuenta(transaccion, PrimaryGreen, ExpenseRed, TextWhite, TextGrey)
+            val ultimosMovimientos = state.transacciones.take(5)
+            if (ultimosMovimientos.isEmpty()) {
+                item { Text("No hay movimientos aún.", color = subTextColor, modifier = Modifier.padding(vertical = 8.dp)) }
+            } else {
+                items(ultimosMovimientos) { transaccion ->
+                    ItemMovimientoCuenta(transaccion, primaryColor, errorColor, textColor)
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
             }
 
-            // --- BOTONES INFERIORES ---
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // Botón VER REPORTE
-                Button(
-                    onClick = { /* Pendiente */ },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen),
-                    shape = RoundedCornerShape(25.dp)
-                ) {
-                    Text("Ver reporte", color = Color.Black, fontWeight = FontWeight.Bold)
-                }
-
-                // Botón EDITAR CUENTA
-                Button(
-                    onClick = { /* Pendiente */ },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = CardBackground),
-                    shape = RoundedCornerShape(25.dp)
-                ) {
-                    Text("Editar cuenta", color = PrimaryGreen, fontWeight = FontWeight.Bold)
+            // BOTÓN VER TODOS
+            if (state.transacciones.size > 5) {
+                item {
+                    OutlinedButton(
+                        onClick = onVerTodos,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = primaryColor)
+                    ) { Text("Ver todos los movimientos") }
                 }
             }
         }
@@ -185,53 +160,28 @@ fun ItemMovimientoCuenta(
     t: TransaccionEntity,
     greenColor: Color,
     redColor: Color,
-    textColor: Color,
-    subTextColor: Color
+    textColor: Color
 ) {
-    val icon = CategoriaUtils.getIcono(t.categoria)
-    // El color del icono depende si es ingreso o gasto
-    val iconTint = if (t.esIngreso) greenColor else Color(0xFFFF8A80)
+    val icon = if(t.categoria == "Transferencia") Icons.Default.SwapHoriz else CategoriaUtils.getIcono(t.categoria)
+    val iconTint = if (t.esIngreso) greenColor else redColor
     val bgIcon = iconTint.copy(alpha = 0.1f)
     val signo = if (t.esIngreso) "+" else "-"
     val colorMonto = if (t.esIngreso) greenColor else redColor
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+            .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Icono Circular
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(bgIcon),
-            contentAlignment = Alignment.Center
-        ) {
+        Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(bgIcon), contentAlignment = Alignment.Center) {
             Icon(imageVector = icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(20.dp))
         }
-
         Spacer(modifier = Modifier.width(16.dp))
-
-        // Texto
         Column(modifier = Modifier.weight(1f)) {
-            // CORRECCIÓN: Usamos t.notaResumen en lugar de t.descripcion
-            // Como fallback usamos la categoría si el resumen estuviera vacío
-            Text(
-                text = t.notaResumen.ifEmpty { t.categoria },
-                color = textColor,
-                fontWeight = FontWeight.Medium,
-                fontSize = 16.sp
-            )
-            // Opcional: Mostrar fecha aquí si quieres
-            // Text(DateUtils.formatearFecha(t.fecha), color = subTextColor, fontSize = 12.sp)
+            Text(text = t.notaResumen.ifEmpty { t.categoria }, color = textColor, fontWeight = FontWeight.Medium, fontSize = 16.sp)
         }
-
-        // Monto
-        Text(
-            text = "$signo${CurrencyUtils.formatCurrency(t.monto)}",
-            color = colorMonto,
-            fontWeight = FontWeight.Bold,
-            fontSize = 16.sp
-        )
+        Text(text = "$signo${CurrencyUtils.formatCurrency(t.monto)}", color = colorMonto, fontWeight = FontWeight.Bold, fontSize = 16.sp)
     }
 }

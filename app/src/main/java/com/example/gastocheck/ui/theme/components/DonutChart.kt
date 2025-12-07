@@ -1,9 +1,6 @@
 package com.example.gastocheck.ui.theme.components
 
-import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.animateIntAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,66 +27,59 @@ fun DonutChart(
     size: Dp = 200.dp,
     thickness: Dp = 20.dp
 ) {
-    // Modo por defecto: Agrupar por Categoría
+    // Por defecto agrupa por categoría y usa colores de categoría
     val datos = remember(transacciones) {
         transacciones.groupBy { it.categoria }
             .mapValues { entry -> entry.value.sumOf { it.monto } }
     }
-    DonutChartGeneric(datos = datos, size = size, thickness = thickness)
+    DonutChartGeneric(
+        datos = datos,
+        size = size,
+        thickness = thickness,
+        colorProvider = { CategoriaUtils.getColor(it) }
+    )
 }
 
 @Composable
 fun DonutChartGeneric(
     datos: Map<String, Double>,
     size: Dp = 200.dp,
-    thickness: Dp = 20.dp
+    thickness: Dp = 20.dp,
+    colorProvider: (String) -> Color
 ) {
     val totalReal = datos.values.sum()
-
-    // Animación de Entrada
     var animationPlayed by remember { mutableStateOf(false) }
     val currentAngle by animateFloatAsState(
         targetValue = if (animationPlayed) 360f else 0f,
         animationSpec = tween(durationMillis = 1000, easing = LinearOutSlowInEasing),
         label = "chartAnimation"
     )
-
-    // Animación del Número
     val animatedTotal by animateIntAsState(
         targetValue = totalReal.toInt(),
         animationSpec = tween(durationMillis = 800),
         label = "numberAnimation"
     )
 
-    LaunchedEffect(key1 = datos) {
-        animationPlayed = true
-    }
+    LaunchedEffect(key1 = datos) { animationPlayed = true }
 
     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(size)) {
         Canvas(modifier = Modifier.size(size)) {
             var startAngle = -90f
 
+            // --- AQUÍ ESTABA EL ERROR: AGREGAMOS "style =" ---
             if (datos.isEmpty()) {
                 drawArc(
                     color = Color.Gray.copy(alpha = 0.2f),
                     startAngle = 0f,
                     sweepAngle = 360f,
                     useCenter = false,
-                    style = Stroke(width = thickness.toPx(), cap = StrokeCap.Round)
+                    style = Stroke(width = thickness.toPx(), cap = StrokeCap.Round) // <--- CORREGIDO
                 )
             }
 
             datos.forEach { (clave, monto) ->
-                // Si la clave es una categoría, usamos su color. Si es una cuenta (Transferencia), generamos uno o usamos default.
-                val color = try {
-                    CategoriaUtils.getColor(clave)
-                } catch (e: Exception) {
-                    // Color fallback o aleatorio determinista para cuentas
-                    Color(clave.hashCode() or 0xFF000000.toInt())
-                }
-
-                // Si el color es gris (fallback), le damos un tono azulado si estamos en modo transferencias
-                val finalColor = if(color == Color.Gray) Color(0xFF2979FF) else color
+                val colorBase = try { colorProvider(clave) } catch (e: Exception) { Color.Gray }
+                val finalColor = if (colorBase == Color.Gray) Color(0xFF2979FF) else colorBase
 
                 val sweepAngle = if (totalReal > 0) (monto / totalReal).toFloat() * 360f else 0f
 
@@ -99,18 +89,14 @@ fun DonutChartGeneric(
                         startAngle = startAngle,
                         sweepAngle = sweepAngle * (currentAngle / 360f),
                         useCenter = false,
-                        style = Stroke(width = thickness.toPx(), cap = StrokeCap.Butt)
+                        style = Stroke(width = thickness.toPx(), cap = StrokeCap.Butt) // <--- CORREGIDO
                     )
                     startAngle += sweepAngle
                 }
             }
         }
-
-        // Texto Central
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("Total", style = MaterialTheme.typography.labelMedium)
-
-            // Usamos formatWithCommas para mostrar "15,608" con coma
             Text(
                 text = "$${CurrencyUtils.formatWithCommas(animatedTotal)}",
                 style = MaterialTheme.typography.headlineMedium,

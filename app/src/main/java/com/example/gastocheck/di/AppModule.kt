@@ -36,20 +36,28 @@ object AppModule {
         )
             .fallbackToDestructiveMigration()
             .addCallback(object : RoomDatabase.Callback() {
+                // Se ejecuta solo cuando se crea la base de datos por primera vez
                 override fun onCreate(db: SupportSQLiteDatabase) {
                     super.onCreate(db)
                     insertarCuentaPorDefecto(db)
                 }
 
+                // Se ejecuta cada vez que se abre (útil para asegurar que exista si se borró manualmente)
                 override fun onOpen(db: SupportSQLiteDatabase) {
                     super.onOpen(db)
-                    insertarCuentaPorDefecto(db)
+                    // Descomenta la siguiente línea si quieres forzar que se cree si no existe al abrir
+                    // insertarCuentaPorDefecto(db)
                 }
 
                 private fun insertarCuentaPorDefecto(db: SupportSQLiteDatabase) {
                     CoroutineScope(Dispatchers.IO).launch {
                         try {
-                            db.execSQL("INSERT OR IGNORE INTO cuentas (id, nombre, tipo, saldoInicial, colorHex, esArchivada) VALUES (1, 'Efectivo', 'Efectivo', 0.0, '#00E676', 0)")
+                            // --- ACTUALIZACIÓN CLAVE ---
+                            // Agregamos el campo 'icono' en la inserción SQL para que coincida con la nueva tabla
+                            db.execSQL(
+                                "INSERT OR IGNORE INTO cuentas (id, nombre, tipo, saldoInicial, colorHex, icono, esArchivada) " +
+                                        "VALUES (1, 'Efectivo', 'Efectivo', 0.0, '#00E676', 'Wallet', 0)"
+                            )
                         } catch (e: Exception) {
                             e.printStackTrace()
                         }
@@ -77,7 +85,6 @@ object AppModule {
         return database.metaDao()
     }
 
-    // --- NUEVO: Proveedor para el DAO de Historial ---
     @Provides
     @Singleton
     fun provideBalanceSnapshotDao(database: AppDatabase): BalanceSnapshotDao {
@@ -89,10 +96,9 @@ object AppModule {
     fun provideTransaccionRepository(
         transaccionDao: TransaccionDao,
         cuentaDao: CuentaDao,
-        balanceSnapshotDao: BalanceSnapshotDao, // <--- INYECTADO AQUÍ
+        balanceSnapshotDao: BalanceSnapshotDao,
         db: AppDatabase
     ): TransaccionRepository {
-        // Se pasa al constructor del repositorio
         return TransaccionRepositoryImpl(transaccionDao, cuentaDao, balanceSnapshotDao, db)
     }
 
