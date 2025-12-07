@@ -1,8 +1,6 @@
 package com.example.gastocheck.ui.theme.navigation
 
-import android.Manifest
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -15,6 +13,8 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
+
+// Importaciones de tus pantallas
 import com.example.gastocheck.ui.theme.screens.agregar.AgregarScreen
 import com.example.gastocheck.ui.theme.screens.agregar.AgregarViewModel
 import com.example.gastocheck.ui.theme.screens.cuentas.*
@@ -78,56 +78,68 @@ fun AppNavigation() {
                 }
             }
         }
-    ) { innerPadding -> // <--- Recibimos el padding del sistema (Edge-to-Edge)
-
+    ) { innerPadding ->
+        // CORRECCIÓN EDGE-TO-EDGE:
+        // No aplicamos padding al NavHost para que el fondo llegue hasta arriba.
         NavHost(
             navController = navController,
             startDestination = "home",
-            // --- MEJORA EDGE-TO-EDGE ---
-            // Aplicamos el padding aquí para que el contenido no se tape,
-            // pero el fondo se extienda por toda la pantalla.
-            modifier = Modifier
-                .padding(innerPadding)
-                .fillMaxSize()
+            modifier = Modifier.fillMaxSize()
         ) {
 
+            // --- HOME (Con Barra de Navegación) ---
             composable("home") {
-                HomeScreen(
-                    agregarViewModel = sharedAgregarViewModel,
-                    onNavegarAgregar = { esIngreso ->
-                        navController.navigate("agregar?id=-1&esIngreso=$esIngreso&vieneDeVoz=false")
-                    },
-                    onNavegarEditar = { id ->
-                        navController.navigate("agregar?id=$id&vieneDeVoz=false")
-                    },
-                    onNavegarMetas = { navController.navigate("metas") },
-                    onNavegarHistorial = { accountId ->
-                        navController.navigate("historial/$accountId")
-                    },
-                    onVozDetectada = { esIngresoDetectado ->
-                        navController.navigate("agregar?id=-1&esIngreso=$esIngresoDetectado&vieneDeVoz=true")
-                    },
-                    onNavegarTransferencia = { id, textoVoz ->
-                        val ruta = if (textoVoz != null) {
-                            "registrar_transferencia?id=$id&textoAudio=$textoVoz"
-                        } else {
-                            "registrar_transferencia?id=$id"
+                // Usamos un Box para aplicar solo el padding inferior (para no tapar con el menú)
+                // pero dejamos el superior libre para que llegue al tope.
+                Box(modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding())) {
+                    HomeScreen(
+                        agregarViewModel = sharedAgregarViewModel,
+                        onNavegarAgregar = { esIngreso ->
+                            navController.navigate("agregar?id=-1&esIngreso=$esIngreso&vieneDeVoz=false")
+                        },
+                        onNavegarEditar = { id ->
+                            navController.navigate("agregar?id=$id&vieneDeVoz=false")
+                        },
+                        onNavegarMetas = { navController.navigate("metas") },
+                        onNavegarHistorial = { accountId ->
+                            navController.navigate("historial/$accountId")
+                        },
+                        onVozDetectada = { esIngresoDetectado ->
+                            navController.navigate("agregar?id=-1&esIngreso=$esIngresoDetectado&vieneDeVoz=true")
+                        },
+                        onNavegarTransferencia = { id, textoVoz ->
+                            val ruta = if (textoVoz != null) {
+                                "registrar_transferencia?id=$id&textoAudio=$textoVoz"
+                            } else {
+                                "registrar_transferencia?id=$id"
+                            }
+                            navController.navigate(ruta)
                         }
-                        navController.navigate(ruta)
-                    }
-                )
+                    )
+                }
             }
 
-            composable("metas") { MetasScreen() }
+            // --- METAS (Con Barra de Navegación) ---
+            composable("metas") {
+                Box(modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding())) {
+                    MetasScreen()
+                }
+            }
 
+            // --- CUENTAS LISTA (Con Barra de Navegación) ---
             composable("cuentas_lista") {
-                CuentasListaScreen(
-                    onNavegarDetalle = { navController.navigate("detalle_cuenta/$it") },
-                    onNavegarCrear = { navController.navigate("crear_cuenta?id=-1") }
-                )
+                Box(modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding())) {
+                    CuentasListaScreen(
+                        onNavegarDetalle = { navController.navigate("detalle_cuenta/$it") },
+                        onNavegarCrear = { navController.navigate("crear_cuenta?id=-1") }
+                    )
+                }
             }
 
-            // --- RUTA CREAR/EDITAR CUENTA ---
+            // --- PANTALLAS SIN BARRA DE NAVEGACIÓN (Pantalla completa real) ---
+            // Aquí no necesitamos aplicar padding extra porque 'innerPadding' será 0
+            // o no queremos restringir el área de dibujo.
+
             composable(
                 "crear_cuenta?id={id}",
                 arguments = listOf(navArgument("id") { type = NavType.IntType; defaultValue = -1 })
@@ -139,7 +151,6 @@ fun AppNavigation() {
                 )
             }
 
-            // --- RUTA DETALLE CON CALLBACKS ---
             composable(
                 "detalle_cuenta/{accountId}",
                 arguments = listOf(navArgument("accountId") { type = NavType.IntType })
@@ -150,7 +161,6 @@ fun AppNavigation() {
                     accountId = accountId,
                     onBack = { navController.popBackStack() },
                     onVerTodos = {
-                        // Navega a la pantalla de lista de movimientos
                         navController.navigate("movimientos_cuenta/$accountId")
                     },
                     onEditar = { id ->
@@ -166,7 +176,6 @@ fun AppNavigation() {
                 )
             }
 
-            // --- RUTA MOVIMIENTOS COMPLETOS DE CUENTA ---
             composable(
                 "movimientos_cuenta/{accountId}",
                 arguments = listOf(navArgument("accountId") { type = NavType.IntType })
@@ -186,7 +195,6 @@ fun AppNavigation() {
                 )
             }
 
-            // --- RUTA TRANSFERENCIA ---
             composable(
                 route = "registrar_transferencia?id={id}&textoAudio={textoAudio}",
                 arguments = listOf(
@@ -204,7 +212,6 @@ fun AppNavigation() {
                 )
             }
 
-            // --- HISTORIAL DE SALDOS (GRÁFICA) ---
             composable(
                 "historial/{accountId}",
                 arguments = listOf(navArgument("accountId") { type = NavType.IntType })
@@ -212,7 +219,6 @@ fun AppNavigation() {
                 HistorialScreen(onBack = { navController.popBackStack() })
             }
 
-            // --- AGREGAR GASTO/INGRESO ---
             composable(
                 route = "agregar?id={id}&esIngreso={esIngreso}&vieneDeVoz={vieneDeVoz}",
                 arguments = listOf(

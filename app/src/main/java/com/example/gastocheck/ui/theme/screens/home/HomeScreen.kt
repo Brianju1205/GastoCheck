@@ -140,12 +140,11 @@ fun HomeScreen(
 
     if (mostrarDetalle && transaccionSeleccionada != null) {
         val t = transaccionSeleccionada!!
-        val cuenta = cuentas.find { it.id == t.cuentaId } // Buscamos la entidad completa
-        val nombreCuenta = cuenta?.nombre ?: "Cuenta"
+        val cuenta = cuentas.find { it.id == t.cuentaId }
 
         DetalleTransaccionDialog(
             transaccion = t,
-            cuenta = cuenta, // Pasamos la cuenta completa
+            cuenta = cuenta, // Pasamos la cuenta completa para que pinte el icono
             onDismiss = { mostrarDetalle = false },
             onDelete = { mostrarConfirmacionBorrar = true },
             onEdit = {
@@ -182,11 +181,15 @@ fun HomeScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
+            // El color de fondo del Scaffold ya llega al borde superior gracias a EdgeToEdge en MainActivity.
+            // Pero necesitamos que el contenido de la TopBar no se tape con la cámara.
+            // Usamos Column o Surface para envolver la TopBar y los Tabs
+
             Column(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
                 CenterAlignedTopAppBar(
                     title = { Text("Mi Dinero", fontWeight = FontWeight.Bold) },
                     colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background,
+                        containerColor = MaterialTheme.colorScheme.background, // Transparente o igual al fondo
                         titleContentColor = MaterialTheme.colorScheme.onBackground
                     ),
                     navigationIcon = { Icon(Icons.Default.AccountBalanceWallet, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 16.dp)) }
@@ -344,7 +347,7 @@ fun HomeScreen(
                                 if (page == 3) {
                                     ItemTransferencia(
                                         transaccion = t,
-                                        cuentaOrigen = cuenta, // Pasamos cuenta completa
+                                        cuentaOrigen = cuenta, // Pasamos la cuenta para el icono
                                         onItemClick = { transaccionSeleccionada = t; mostrarDetalle = true },
                                         onEdit = { onNavegarTransferencia(t.id, null) },
                                         onDelete = { transaccionSeleccionada = t; mostrarConfirmacionBorrar = true }
