@@ -63,7 +63,9 @@ fun GastoCheckTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.background.toArgb()
+            // Hacer la barra de estado transparente
+            window.statusBarColor = Color.Transparent.toArgb()
+            // Controlar si los iconos son oscuros o claros
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
         }
     }

@@ -46,7 +46,7 @@ object AppModule {
                 override fun onOpen(db: SupportSQLiteDatabase) {
                     super.onOpen(db)
                     // Descomenta la siguiente línea si quieres forzar que se cree si no existe al abrir
-                    // insertarCuentaPorDefecto(db)
+                    insertarCuentaPorDefecto(db)
                 }
 
                 private fun insertarCuentaPorDefecto(db: SupportSQLiteDatabase) {

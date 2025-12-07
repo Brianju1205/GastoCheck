@@ -1,6 +1,7 @@
 package com.example.gastocheck.ui.theme.screens.cuentas
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -19,7 +20,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.gastocheck.data.database.entity.CuentaEntity
 import com.example.gastocheck.data.database.entity.TransaccionEntity
+import com.example.gastocheck.ui.theme.screens.home.DetalleTransaccionDialog
 import com.example.gastocheck.ui.theme.util.CategoriaUtils
 import com.example.gastocheck.ui.theme.util.CurrencyUtils
 import com.example.gastocheck.ui.theme.util.IconoUtils
@@ -30,11 +33,19 @@ fun DetalleCuentaScreen(
     accountId: Int,
     viewModel: DetalleCuentaViewModel = hiltViewModel(),
     onBack: () -> Unit,
-    onEditar: (Int) -> Unit, // Callback para editar
-    onVerTodos: () -> Unit
+    onEditar: (Int) -> Unit,
+    onVerTodos: () -> Unit,
+    // Callbacks para el diálogo de transacciones (reutilizamos la lógica de navegación)
+    onEditarTransaccion: (Int, String?) -> Unit
 ) {
     val state by viewModel.uiState.collectAsState()
-    var mostrarConfirmacionBorrar by remember { mutableStateOf(false) }
+
+    // Estados para diálogos
+    var mostrarConfirmacionBorrarCuenta by remember { mutableStateOf(false) }
+    var mostrarConfirmacionBorrarTransaccion by remember { mutableStateOf(false) }
+
+    var transaccionSeleccionada by remember { mutableStateOf<TransaccionEntity?>(null) }
+    var mostrarDetalleTransaccion by remember { mutableStateOf(false) }
 
     // --- COLORES ---
     val backgroundColor = MaterialTheme.colorScheme.background
@@ -48,9 +59,12 @@ fun DetalleCuentaScreen(
         if (state.cuenta == null && accountId != -1) { /* onBack() */ }
     }
 
-    if (mostrarConfirmacionBorrar) {
+    // --- DIÁLOGOS ---
+
+    // 1. Borrar Cuenta
+    if (mostrarConfirmacionBorrarCuenta) {
         AlertDialog(
-            onDismissRequest = { mostrarConfirmacionBorrar = false },
+            onDismissRequest = { mostrarConfirmacionBorrarCuenta = false },
             icon = { Icon(Icons.Default.Warning, null, tint = errorColor) },
             title = { Text("¿Eliminar cuenta?") },
             text = { Text("Se eliminarán también todos los movimientos de esta cuenta. Esta acción no se puede deshacer.") },
@@ -58,12 +72,57 @@ fun DetalleCuentaScreen(
                 Button(
                     onClick = {
                         viewModel.borrarCuentaActual { onBack() }
-                        mostrarConfirmacionBorrar = false
+                        mostrarConfirmacionBorrarCuenta = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = errorColor)
                 ) { Text("Eliminar") }
             },
-            dismissButton = { TextButton(onClick = { mostrarConfirmacionBorrar = false }) { Text("Cancelar") } }
+            dismissButton = { TextButton(onClick = { mostrarConfirmacionBorrarCuenta = false }) { Text("Cancelar") } }
+        )
+    }
+
+    // 2. Detalle Transacción
+    if (mostrarDetalleTransaccion && transaccionSeleccionada != null) {
+        val t = transaccionSeleccionada!!
+
+        DetalleTransaccionDialog(
+            transaccion = t,
+            cuenta = state.cuenta, // Pasamos la cuenta actual
+            onDismiss = { mostrarDetalleTransaccion = false },
+            onDelete = { mostrarConfirmacionBorrarTransaccion = true },
+            onEdit = {
+                mostrarDetalleTransaccion = false
+                // Usamos el callback de navegación que pasaremos desde AppNavigation
+                // Si es transferencia, pasamos null como textoAudio
+                if (t.categoria == "Transferencia") {
+                    onEditarTransaccion(t.id, "TRANSFERENCIA")
+                } else {
+                    onEditarTransaccion(t.id, "GASTO_INGRESO")
+                }
+            }
+        )
+    }
+
+    // 3. Borrar Transacción
+    if (mostrarConfirmacionBorrarTransaccion && transaccionSeleccionada != null) {
+        AlertDialog(
+            onDismissRequest = { mostrarConfirmacionBorrarTransaccion = false },
+            icon = { Icon(Icons.Default.Warning, null, tint = errorColor) },
+            title = { Text("¿Eliminar movimiento?") },
+            text = { Text("Esta acción ajustará el saldo de tu cuenta.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        // Necesitas un método en DetalleCuentaViewModel para borrar transacciones
+                        // Por ahora asumimos que existe o lo agregamos
+                        viewModel.borrarTransaccion(transaccionSeleccionada!!)
+                        mostrarConfirmacionBorrarTransaccion = false
+                        mostrarDetalleTransaccion = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = errorColor)
+                ) { Text("Eliminar") }
+            },
+            dismissButton = { TextButton(onClick = { mostrarConfirmacionBorrarTransaccion = false }) { Text("Cancelar") } }
         )
     }
 
@@ -72,37 +131,22 @@ fun DetalleCuentaScreen(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    // --- TÍTULO CON ICONO Y COLOR DE LA CUENTA ---
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (state.cuenta != null) {
                             val colorCuenta = try { Color(android.graphics.Color.parseColor(state.cuenta!!.colorHex)) } catch(e:Exception){ primaryColor }
                             val icono = IconoUtils.getIconoByName(state.cuenta!!.icono)
-
                             Icon(imageVector = icono, contentDescription = null, tint = colorCuenta, modifier = Modifier.size(24.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = state.cuenta!!.nombre,
-                                color = textColor,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            Text(text = state.cuenta!!.nombre, color = textColor, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         } else {
                             Text("Cargando...", color = textColor)
                         }
                     }
                 },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Atrás", tint = textColor) }
-                },
-                // --- BOTONES DE EDITAR Y ELIMINAR EN LA BARRA ---
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Atrás", tint = textColor) } },
                 actions = {
-                    IconButton(onClick = { state.cuenta?.let { onEditar(it.id) } }) {
-                        Icon(Icons.Default.Edit, "Editar", tint = textColor)
-                    }
-                    IconButton(onClick = { mostrarConfirmacionBorrar = true }) {
-                        Icon(Icons.Default.Delete, "Eliminar", tint = errorColor)
-                    }
+                    IconButton(onClick = { state.cuenta?.let { onEditar(it.id) } }) { Icon(Icons.Default.Edit, "Editar", tint = textColor) }
+                    IconButton(onClick = { mostrarConfirmacionBorrarCuenta = true }) { Icon(Icons.Default.Delete, "Eliminar", tint = errorColor) }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = backgroundColor)
             )
@@ -113,7 +157,7 @@ fun DetalleCuentaScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            // 1. TARJETA DE SALDO
+            // SALDO
             item {
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = cardColor)) {
                     Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -124,7 +168,7 @@ fun DetalleCuentaScreen(
                 }
             }
 
-            // 2. LISTA DE MOVIMIENTOS
+            // MOVIMIENTOS
             item {
                 Text("Últimos movimientos", color = textColor, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 Spacer(modifier = Modifier.height(8.dp))
@@ -135,16 +179,24 @@ fun DetalleCuentaScreen(
                 item { Text("No hay movimientos aún.", color = subTextColor, modifier = Modifier.padding(vertical = 8.dp)) }
             } else {
                 items(ultimosMovimientos) { transaccion ->
-                    ItemMovimientoCuenta(transaccion, primaryColor, errorColor, textColor)
+                    ItemMovimientoCuentaClickable(
+                        t = transaccion,
+                        greenColor = primaryColor,
+                        redColor = errorColor,
+                        textColor = textColor,
+                        onClick = {
+                            transaccionSeleccionada = transaccion
+                            mostrarDetalleTransaccion = true
+                        }
+                    )
                     Spacer(modifier = Modifier.height(12.dp))
                 }
             }
 
-            // BOTÓN VER TODOS
             if (state.transacciones.size > 5) {
                 item {
                     OutlinedButton(
-                        onClick = onVerTodos,
+                        onClick = onVerTodos, // Ahora navega a la nueva lista
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = primaryColor)
@@ -156,11 +208,12 @@ fun DetalleCuentaScreen(
 }
 
 @Composable
-fun ItemMovimientoCuenta(
+fun ItemMovimientoCuentaClickable(
     t: TransaccionEntity,
     greenColor: Color,
     redColor: Color,
-    textColor: Color
+    textColor: Color,
+    onClick: () -> Unit // Nuevo parámetro
 ) {
     val icon = if(t.categoria == "Transferencia") Icons.Default.SwapHoriz else CategoriaUtils.getIcono(t.categoria)
     val iconTint = if (t.esIngreso) greenColor else redColor
@@ -172,6 +225,7 @@ fun ItemMovimientoCuenta(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick) // <--- Hacemos clickeable
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

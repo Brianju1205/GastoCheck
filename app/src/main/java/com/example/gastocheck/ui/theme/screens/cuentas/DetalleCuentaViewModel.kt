@@ -57,4 +57,13 @@ class DetalleCuentaViewModel @Inject constructor(
             }
         }
     }
+    fun borrarTransaccion(t: TransaccionEntity) {
+        viewModelScope.launch {
+            if (t.categoria == "Transferencia") {
+                repository.eliminarTransferenciaCompleta(t.id)
+            } else {
+                repository.deleteTransaccion(t)
+            }
+        }
+    }
 }
