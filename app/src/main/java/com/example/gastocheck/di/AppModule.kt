@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.gastocheck.data.database.AppDatabase
+import com.example.gastocheck.data.database.dao.AbonoDao // <--- 1. IMPORTANTE: Importar el nuevo DAO
 import com.example.gastocheck.data.database.dao.BalanceSnapshotDao
 import com.example.gastocheck.data.database.dao.CuentaDao
 import com.example.gastocheck.data.database.dao.MetaDao
@@ -36,24 +37,19 @@ object AppModule {
         )
             .fallbackToDestructiveMigration()
             .addCallback(object : RoomDatabase.Callback() {
-                // Se ejecuta solo cuando se crea la base de datos por primera vez
                 override fun onCreate(db: SupportSQLiteDatabase) {
                     super.onCreate(db)
                     insertarCuentaPorDefecto(db)
                 }
 
-                // Se ejecuta cada vez que se abre (útil para asegurar que exista si se borró manualmente)
                 override fun onOpen(db: SupportSQLiteDatabase) {
                     super.onOpen(db)
-                    // Descomenta la siguiente línea si quieres forzar que se cree si no existe al abrir
                     insertarCuentaPorDefecto(db)
                 }
 
                 private fun insertarCuentaPorDefecto(db: SupportSQLiteDatabase) {
                     CoroutineScope(Dispatchers.IO).launch {
                         try {
-                            // --- ACTUALIZACIÓN CLAVE ---
-                            // Agregamos el campo 'icono' en la inserción SQL para que coincida con la nueva tabla
                             db.execSQL(
                                 "INSERT OR IGNORE INTO cuentas (id, nombre, tipo, saldoInicial, colorHex, icono, esArchivada) " +
                                         "VALUES (1, 'Efectivo', 'Efectivo', 0.0, '#00E676', 'Wallet', 0)"
@@ -84,6 +80,14 @@ object AppModule {
     fun provideMetaDao(database: AppDatabase): MetaDao {
         return database.metaDao()
     }
+
+    // --- 2. AGREGADO: Proveedor para el AbonoDao ---
+    @Provides
+    @Singleton
+    fun provideAbonoDao(database: AppDatabase): AbonoDao {
+        return database.abonoDao()
+    }
+    // ----------------------------------------------
 
     @Provides
     @Singleton

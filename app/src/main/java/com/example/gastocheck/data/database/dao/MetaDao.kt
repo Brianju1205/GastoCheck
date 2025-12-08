@@ -11,7 +11,8 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface MetaDao {
-    @Query("SELECT * FROM metas")
+    // AQUI: Usamos "metas" porque así lo pusiste en tu Entity
+    @Query("SELECT * FROM metas ORDER BY id DESC")
     fun getMetas(): Flow<List<MetaEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -22,4 +23,8 @@ interface MetaDao {
 
     @Delete
     suspend fun deleteMeta(meta: MetaEntity)
+
+    // AQUI TAMBIÉN: "UPDATE metas ..."
+    @Query("UPDATE metas SET montoAhorrado = :nuevoMonto WHERE id = :id")
+    suspend fun updateMonto(id: Int, nuevoMonto: Double)
 }

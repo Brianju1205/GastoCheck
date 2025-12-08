@@ -55,6 +55,7 @@ dependencies {
     // --- ROOM ---
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
+    implementation(libs.androidx.compose.foundation)
     ksp(libs.androidx.room.compiler) // ✅ Correcto: solo KSP y versión 2.6.1 desde TOML
 
     // --- HILT ---
