@@ -26,7 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -144,7 +144,7 @@ fun HomeScreen(
 
         DetalleTransaccionDialog(
             transaccion = t,
-            cuenta = cuenta, // Pasamos la cuenta completa para que pinte el icono
+            cuenta = cuenta,
             onDismiss = { mostrarDetalle = false },
             onDelete = { mostrarConfirmacionBorrar = true },
             onEdit = {
@@ -181,15 +181,11 @@ fun HomeScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            // El color de fondo del Scaffold ya llega al borde superior gracias a EdgeToEdge en MainActivity.
-            // Pero necesitamos que el contenido de la TopBar no se tape con la cámara.
-            // Usamos Column o Surface para envolver la TopBar y los Tabs
-
             Column(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
                 CenterAlignedTopAppBar(
                     title = { Text("Mi Dinero", fontWeight = FontWeight.Bold) },
                     colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background, // Transparente o igual al fondo
+                        containerColor = MaterialTheme.colorScheme.background,
                         titleContentColor = MaterialTheme.colorScheme.onBackground
                     ),
                     navigationIcon = { Icon(Icons.Default.AccountBalanceWallet, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 16.dp)) }
@@ -258,7 +254,19 @@ fun HomeScreen(
                             Spacer(modifier = Modifier.height(16.dp))
                             BalanceCarousel(saldoActual = saldoTotal, historial = historial, onVerMasClick = { onNavegarHistorial(cuentaSeleccionadaId) })
                         }
-                        if (listaMetas.isNotEmpty()) { item { val m = listaMetas.last(); CardProgresoAhorro(m.nombre, m.montoAhorrado, m.montoObjetivo) } }
+
+                        // --- AQUÍ ESTÁ LA ACTUALIZACIÓN DE LA TARJETA DE META ---
+                        if (listaMetas.isNotEmpty()) {
+                            item {
+                                val m = listaMetas.first()
+                                CardProgresoAhorro(
+                                    nombre = m.nombre,
+                                    ahorrado = m.montoAhorrado,
+                                    meta = m.montoObjetivo,
+                                    iconoNombre = m.icono // Pasamos el nombre del ícono
+                                )
+                            }
+                        }
 
                         item { Text("Últimos Movimientos", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp)) }
 
@@ -271,7 +279,7 @@ fun HomeScreen(
                             if (t.categoria == "Transferencia") {
                                 ItemTransferencia(
                                     transaccion = t,
-                                    cuentaOrigen = cuenta, // Pasamos la cuenta para el icono
+                                    cuentaOrigen = cuenta,
                                     onItemClick = { transaccionSeleccionada = t; mostrarDetalle = true },
                                     onEdit = { onNavegarTransferencia(t.id, null) },
                                     onDelete = { transaccionSeleccionada = t; mostrarConfirmacionBorrar = true }
@@ -315,7 +323,7 @@ fun HomeScreen(
                             if (listaFiltrada.isNotEmpty()) {
                                 Box(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp), contentAlignment = Alignment.Center) {
                                     if (page == 3) {
-                                        // GRÁFICA TRANSFERENCIAS (Color de Cuenta)
+                                        // GRÁFICA TRANSFERENCIAS
                                         val datosCuentas = listaFiltrada.groupBy { t ->
                                             cuentas.find { it.id == t.cuentaId }?.nombre ?: "Desconocida"
                                         }.mapValues { entry -> entry.value.sumOf { it.monto } }
@@ -331,7 +339,6 @@ fun HomeScreen(
                                             }
                                         )
                                     } else {
-                                        // GRÁFICA NORMAL (Color de Categoría)
                                         DonutChart(transacciones = listaFiltrada, size = 200.dp)
                                     }
                                 }
@@ -347,7 +354,7 @@ fun HomeScreen(
                                 if (page == 3) {
                                     ItemTransferencia(
                                         transaccion = t,
-                                        cuentaOrigen = cuenta, // Pasamos la cuenta para el icono
+                                        cuentaOrigen = cuenta,
                                         onItemClick = { transaccionSeleccionada = t; mostrarDetalle = true },
                                         onEdit = { onNavegarTransferencia(t.id, null) },
                                         onDelete = { transaccionSeleccionada = t; mostrarConfirmacionBorrar = true }
@@ -365,12 +372,11 @@ fun HomeScreen(
     }
 }
 
-// --- ITEM TRANSFERENCIA MEJORADO ---
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ItemTransferencia(
     transaccion: TransaccionEntity,
-    cuentaOrigen: CuentaEntity?, // <--- RECIBIMOS LA CUENTA
+    cuentaOrigen: CuentaEntity?,
     onItemClick: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit
@@ -378,7 +384,6 @@ fun ItemTransferencia(
     val nombreDestino = transaccion.notaCompleta.replace("Transferencia a ", "")
     var mostrarMenu by remember { mutableStateOf(false) }
 
-    // Obtener color e icono de la cuenta origen
     val colorCuenta = try {
         Color(android.graphics.Color.parseColor(cuentaOrigen?.colorHex ?: "#00E676"))
     } catch (e: Exception) { MaterialTheme.colorScheme.primary }
@@ -386,21 +391,17 @@ fun ItemTransferencia(
     val iconoCuenta = if(cuentaOrigen != null) IconoUtils.getIconoByName(cuentaOrigen.icono) else Icons.Default.SwapHoriz
 
     val textColor = MaterialTheme.colorScheme.onBackground
-    val iconBgColor = colorCuenta.copy(alpha = 0.2f) // Fondo tintado con el color de la cuenta
+    val iconBgColor = colorCuenta.copy(alpha = 0.2f)
     val arrowColor = MaterialTheme.colorScheme.outline
     val montoColor = Color(0xFF2979FF)
     val subTextColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     Box(modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onItemClick, onLongClick = { mostrarMenu = true }).padding(vertical = 8.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-
-            // ICONO PERSONALIZADO
             Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(iconBgColor), contentAlignment = Alignment.Center) {
                 Icon(imageVector = iconoCuenta, contentDescription = null, tint = colorCuenta)
             }
-
             Spacer(modifier = Modifier.width(16.dp))
-
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(text = cuentaOrigen?.nombre ?: "Origen", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = textColor)
@@ -421,7 +422,6 @@ fun ItemTransferencia(
     Divider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), thickness = 0.5.dp)
 }
 
-// --- DIALOGO DETALLE MEJORADO ---
 @Composable
 fun DetalleTransaccionDialog(
     transaccion: TransaccionEntity,
@@ -430,9 +430,7 @@ fun DetalleTransaccionDialog(
     onDelete: () -> Unit,
     onEdit: () -> Unit
 ) {
-    // Si es transferencia, usamos el icono/color de la cuenta. Si no, de la categoría.
     val isTransfer = transaccion.categoria == "Transferencia"
-
     val (icono, color) = if (isTransfer && cuenta != null) {
         val c = try { Color(android.graphics.Color.parseColor(cuenta.colorHex)) } catch(e:Exception){ MaterialTheme.colorScheme.primary }
         Pair(IconoUtils.getIconoByName(cuenta.icono), c)
@@ -465,7 +463,6 @@ fun DetalleTransaccionDialog(
     )
 }
 
-// ... Resto de componentes (ItemTransaccionModerno, DialogoEscuchandoAnimado, etc) sin cambios ...
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ItemTransaccionModerno(
@@ -517,17 +514,75 @@ fun DialogoEscuchandoAnimado(onDismiss: () -> Unit) {
     }
 }
 
+// --- TARJETA DE PROGRESO MEJORADA ---
 @Composable
-fun CardProgresoAhorro(nombre: String, ahorrado: Double, meta: Double) {
-    val progreso = (ahorrado / meta).toFloat().coerceIn(0f, 1f)
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Meta: $nombre", fontWeight = FontWeight.Bold)
-                Text("${CurrencyUtils.formatCurrency(ahorrado)} / ${CurrencyUtils.formatCurrency(meta)}", fontSize = 12.sp)
+fun CardProgresoAhorro(nombre: String, ahorrado: Double, meta: Double, iconoNombre: String) {
+    val progreso = if (meta > 0) (ahorrado / meta).toFloat().coerceIn(0f, 1f) else 0f
+    val colorNeon = Color(0xFF00E676)
+
+    // Obtenemos el vector del icono
+    val iconoVector = getIconoByNameHome(iconoNombre)
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // ICONO DE LA META
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(colorNeon.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = iconoVector,
+                        contentDescription = null,
+                        tint = colorNeon,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                // TEXTOS
+                Column {
+                    Text(
+                        text = nombre,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "${CurrencyUtils.formatCurrency(ahorrado)} / ${CurrencyUtils.formatCurrency(meta)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            LinearProgressIndicator(progress = { progreso }, modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape))
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // BARRA DE PROGRESO PERSONALIZADA (Gruesa y redonda)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(12.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.Gray.copy(alpha = 0.2f))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(progreso)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(50))
+                        .background(colorNeon)
+                )
+            }
         }
     }
 }
@@ -536,4 +591,20 @@ fun CardProgresoAhorro(nombre: String, ahorrado: Double, meta: Double) {
 fun DialogoEditarSaldo(saldoActual: Double, onDismiss: () -> Unit, onConfirm: (Double) -> Unit) {
     var texto by remember { mutableStateOf(saldoActual.toString()) }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Ajustar Saldo Base") }, text = { OutlinedTextField(value = texto, onValueChange = { texto = it }, label = { Text("Saldo Inicial ($)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)) }, confirmButton = { Button(onClick = { val n = texto.toDoubleOrNull(); if (n != null) onConfirm(n) }) { Text("Guardar") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } })
+}
+
+// Función Helper Local para Iconos de Metas en el Home
+fun getIconoByNameHome(nombre: String): ImageVector {
+    return when (nombre) {
+        "DirectionsCar" -> Icons.Default.DirectionsCar
+        "TwoWheeler" -> Icons.Default.TwoWheeler
+        "Home" -> Icons.Default.Home
+        "Flight" -> Icons.Default.Flight
+        "Smartphone" -> Icons.Default.Smartphone
+        "Computer" -> Icons.Default.Computer
+        "School" -> Icons.Default.School
+        "Pets" -> Icons.Default.Pets
+        "ShoppingBag" -> Icons.Default.ShoppingBag
+        else -> Icons.Default.Savings
+    }
 }
