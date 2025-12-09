@@ -3,17 +3,20 @@ package com.example.gastocheck.data.database
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
-import com.example.gastocheck.data.database.Converters
-import com.example.gastocheck.data.database.dao.AbonoDao // <--- IMPORTANTE
+// Imports de DAOs
+import com.example.gastocheck.data.database.dao.AbonoDao
 import com.example.gastocheck.data.database.dao.BalanceSnapshotDao
 import com.example.gastocheck.data.database.dao.CuentaDao
 import com.example.gastocheck.data.database.dao.MetaDao
+import com.example.gastocheck.data.database.dao.SuscripcionDao // <--- Correcto
 import com.example.gastocheck.data.database.dao.TransaccionDao
 import com.example.gastocheck.data.database.dao.VozPendienteDao
-import com.example.gastocheck.data.database.entity.AbonoEntity // <--- IMPORTANTE
+// Imports de Entidades
+import com.example.gastocheck.data.database.entity.AbonoEntity
 import com.example.gastocheck.data.database.entity.BalanceSnapshotEntity
 import com.example.gastocheck.data.database.entity.CuentaEntity
 import com.example.gastocheck.data.database.entity.MetaEntity
+import com.example.gastocheck.data.database.entity.SuscripcionEntity // <--- ESTE FALTABA
 import com.example.gastocheck.data.database.entity.TransaccionEntity
 import com.example.gastocheck.data.database.entity.VozPendienteEntity
 
@@ -24,9 +27,10 @@ import com.example.gastocheck.data.database.entity.VozPendienteEntity
         VozPendienteEntity::class,
         CuentaEntity::class,
         BalanceSnapshotEntity::class,
-        AbonoEntity::class // <--- 1. AGREGADO: La nueva tabla para el historial
+        AbonoEntity::class,
+        SuscripcionEntity::class // <--- Nueva tabla registrada
     ],
-    version = 10, // <--- 2. ACTUALIZADO: Subimos la versión de 9 a 10
+    version = 14, // <--- Versión actualizada
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -36,7 +40,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun vozPendienteDao(): VozPendienteDao
     abstract fun cuentaDao(): CuentaDao
     abstract fun balanceSnapshotDao(): BalanceSnapshotDao
-
-    // --- 3. AGREGADO: El DAO para poder guardar y leer los abonos
     abstract fun abonoDao(): AbonoDao
+
+    // Nuevo DAO para suscripciones
+    abstract fun suscripcionDao(): SuscripcionDao
 }

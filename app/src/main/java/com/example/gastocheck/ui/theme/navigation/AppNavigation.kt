@@ -21,6 +21,7 @@ import com.example.gastocheck.ui.theme.screens.cuentas.*
 import com.example.gastocheck.ui.theme.screens.historial.HistorialScreen
 import com.example.gastocheck.ui.theme.screens.home.HomeScreen
 import com.example.gastocheck.ui.theme.screens.metas.MetasScreen
+import com.example.gastocheck.ui.theme.screens.suscripciones.SuscripcionesScreen // <--- IMPORTANTE
 import com.example.gastocheck.ui.theme.screens.transferencia.RegistrarTransferenciaScreen
 
 @Composable
@@ -32,13 +33,15 @@ fun AppNavigation() {
     // --- INSTANCIA COMPARTIDA DEL VIEWMODEL ---
     val sharedAgregarViewModel: AgregarViewModel = hiltViewModel()
 
-    val rutasConBarra = listOf("home", "cuentas_lista", "metas")
+    // AGREGAMOS "suscripciones" A LA LISTA DE RUTAS CON BARRA
+    val rutasConBarra = listOf("home", "cuentas_lista", "metas", "suscripciones")
     val showBars = currentRoute in rutasConBarra
 
     Scaffold(
         bottomBar = {
             if (showBars) {
                 NavigationBar {
+                    // 1. INICIO
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Home, null) },
                         label = { Text("Inicio") },
@@ -51,6 +54,7 @@ fun AppNavigation() {
                             }
                         }
                     )
+                    // 2. CUENTAS
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.AccountBalance, null) },
                         label = { Text("Cuentas") },
@@ -63,6 +67,7 @@ fun AppNavigation() {
                             }
                         }
                     )
+                    // 3. METAS
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Star, null) },
                         label = { Text("Metas") },
@@ -75,22 +80,31 @@ fun AppNavigation() {
                             }
                         }
                     )
+                    // 4. SUSCRIPCIONES (NUEVO)
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.EventRepeat, null) }, // Icono de repetición/calendario
+                        label = { Text("Suscr.") }, // Texto corto
+                        selected = currentRoute == "suscripciones",
+                        onClick = {
+                            navController.navigate("suscripciones") {
+                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    )
                 }
             }
         }
     ) { innerPadding ->
-        // CORRECCIÓN EDGE-TO-EDGE:
-        // No aplicamos padding al NavHost para que el fondo llegue hasta arriba.
         NavHost(
             navController = navController,
             startDestination = "home",
             modifier = Modifier.fillMaxSize()
         ) {
 
-            // --- HOME (Con Barra de Navegación) ---
+            // --- HOME ---
             composable("home") {
-                // Usamos un Box para aplicar solo el padding inferior (para no tapar con el menú)
-                // pero dejamos el superior libre para que llegue al tope.
                 Box(modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding())) {
                     HomeScreen(
                         agregarViewModel = sharedAgregarViewModel,
@@ -119,14 +133,21 @@ fun AppNavigation() {
                 }
             }
 
-            // --- METAS (Con Barra de Navegación) ---
+            // --- SUSCRIPCIONES (NUEVO) ---
+            composable("suscripciones") {
+                Box(modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding())) {
+                    SuscripcionesScreen()
+                }
+            }
+
+            // --- METAS ---
             composable("metas") {
                 Box(modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding())) {
                     MetasScreen()
                 }
             }
 
-            // --- CUENTAS LISTA (Con Barra de Navegación) ---
+            // --- CUENTAS ---
             composable("cuentas_lista") {
                 Box(modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding())) {
                     CuentasListaScreen(
@@ -136,9 +157,7 @@ fun AppNavigation() {
                 }
             }
 
-            // --- PANTALLAS SIN BARRA DE NAVEGACIÓN (Pantalla completa real) ---
-            // Aquí no necesitamos aplicar padding extra porque 'innerPadding' será 0
-            // o no queremos restringir el área de dibujo.
+            // --- PANTALLAS SECUNDARIAS ---
 
             composable(
                 "crear_cuenta?id={id}",

@@ -9,6 +9,7 @@ import com.example.gastocheck.data.database.dao.AbonoDao // <--- 1. IMPORTANTE: 
 import com.example.gastocheck.data.database.dao.BalanceSnapshotDao
 import com.example.gastocheck.data.database.dao.CuentaDao
 import com.example.gastocheck.data.database.dao.MetaDao
+import com.example.gastocheck.data.database.dao.SuscripcionDao
 import com.example.gastocheck.data.database.dao.TransaccionDao
 import com.example.gastocheck.data.gemini.GeminiRepository
 import com.example.gastocheck.data.repository.TransaccionRepository
@@ -110,5 +111,11 @@ object AppModule {
     @Singleton
     fun provideGeminiRepository(): GeminiRepository {
         return GeminiRepository()
+    }
+
+    @Provides
+    @Singleton
+    fun provideSuscripcionDao(database: AppDatabase): SuscripcionDao {
+        return database.suscripcionDao()
     }
 }
