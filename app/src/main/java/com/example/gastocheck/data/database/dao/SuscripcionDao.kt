@@ -9,8 +9,9 @@ interface SuscripcionDao {
     @Query("SELECT * FROM suscripciones ORDER BY fechaPago ASC")
     fun getSuscripciones(): Flow<List<SuscripcionEntity>>
 
+    // IMPORTANTE: Debe devolver Long para obtener el ID recién creado
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertSuscripcion(suscripcion: SuscripcionEntity)
+    suspend fun insertSuscripcion(suscripcion: SuscripcionEntity): Long
 
     @Delete
     suspend fun deleteSuscripcion(suscripcion: SuscripcionEntity)

@@ -1,25 +1,31 @@
 package com.example.gastocheck.ui.theme.screens.suscripciones
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.workDataOf
 import com.example.gastocheck.data.database.dao.SuscripcionDao
 import com.example.gastocheck.data.database.entity.SuscripcionEntity
 import com.example.gastocheck.data.repository.TransaccionRepository
+import com.example.gastocheck.ui.theme.worker.NotificationWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.util.Calendar
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 enum class EstadoSuscripcion { PAGADO, PENDIENTE, ATRASADO, CANCELADO }
-
-// 1. ACTUALIZAMOS EL ENUM DE FILTROS
 enum class FiltroSuscripcion { TODAS, PROXIMAS, ATRASADAS, PAGADAS, CANCELADAS }
 
 @HiltViewModel
 class SuscripcionesViewModel @Inject constructor(
     private val suscripcionDao: SuscripcionDao,
-    private val repository: TransaccionRepository
+    private val repository: TransaccionRepository,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _filtroActual = MutableStateFlow(FiltroSuscripcion.TODAS)
@@ -31,7 +37,6 @@ class SuscripcionesViewModel @Inject constructor(
     val suscripcionesFiltradas = combine(suscripcionesRaw, _filtroActual) { lista, filtro ->
         lista.filter { sub ->
             val estado = calcularEstado(sub)
-            // 2. LÓGICA PARA LOS NUEVOS FILTROS
             when (filtro) {
                 FiltroSuscripcion.TODAS -> true
                 FiltroSuscripcion.PROXIMAS -> estado == EstadoSuscripcion.PENDIENTE && diasRestantes(sub.fechaPago) <= 7
@@ -62,8 +67,68 @@ class SuscripcionesViewModel @Inject constructor(
         viewModelScope.launch {
             val subExistente = suscripcionesRaw.first().find { it.id == id }
             val estado = subExistente?.estadoActual
+
             val nueva = SuscripcionEntity(id, nombre, monto, fecha, frec, icono, cta, nota, recordatorio, hora, estado)
-            if (id == 0) suscripcionDao.insertSuscripcion(nueva) else suscripcionDao.updateSuscripcion(nueva)
+
+            val idFinal = if (id == 0) {
+                suscripcionDao.insertSuscripcion(nueva).toInt()
+            } else {
+                suscripcionDao.updateSuscripcion(nueva)
+                id
+            }
+
+            programarNotificacion(idFinal, nombre, monto, fecha, recordatorio, hora)
+        }
+    }
+
+    private fun programarNotificacion(id: Int, nombre: String, monto: Double, fechaPago: Long, recordatorio: String, hora: String) {
+        val workManager = WorkManager.getInstance(context)
+        val tag = "sub_$id"
+
+        workManager.cancelAllWorkByTag(tag)
+
+        val diasAntes = when(recordatorio) {
+            "1 día antes" -> 1
+            "3 días antes" -> 3
+            "7 días antes" -> 7
+            else -> 0
+        }
+
+        // --- LÓGICA DE MENSAJE PERSONALIZADO ---
+        val mensajeTexto = when(recordatorio) {
+            "1 día antes" -> "Recuerda que pagarás $$monto mañana"
+            "3 días antes" -> "Recuerda que pagarás $$monto dentro de 3 días"
+            "7 días antes" -> "Recuerda que pagarás $$monto dentro de 7 días"
+            else -> "Recuerda que tienes un pago de $$monto pendiente"
+        }
+        // ---------------------------------------
+
+        val calendario = Calendar.getInstance().apply { timeInMillis = fechaPago }
+        val (h, m) = hora.split(":").map { it.toInt() }
+
+        calendario.add(Calendar.DAY_OF_YEAR, -diasAntes)
+        calendario.set(Calendar.HOUR_OF_DAY, h)
+        calendario.set(Calendar.MINUTE, m)
+        calendario.set(Calendar.SECOND, 0)
+
+        val triggerTime = calendario.timeInMillis
+        val ahora = System.currentTimeMillis()
+        val delay = triggerTime - ahora
+
+        if (delay > 0) {
+            val datos = workDataOf(
+                "titulo" to "Pago próximo: $nombre",
+                "mensaje" to mensajeTexto, // Usamos el mensaje personalizado aquí
+                "id" to id
+            )
+
+            val workRequest = OneTimeWorkRequestBuilder<NotificationWorker>()
+                .setInitialDelay(delay, TimeUnit.MILLISECONDS)
+                .setInputData(datos)
+                .addTag(tag)
+                .build()
+
+            workManager.enqueue(workRequest)
         }
     }
 
@@ -74,7 +139,10 @@ class SuscripcionesViewModel @Inject constructor(
     }
 
     fun borrarSuscripcion(sub: SuscripcionEntity) {
-        viewModelScope.launch { suscripcionDao.deleteSuscripcion(sub) }
+        viewModelScope.launch {
+            suscripcionDao.deleteSuscripcion(sub)
+            WorkManager.getInstance(context).cancelAllWorkByTag("sub_${sub.id}")
+        }
     }
 
     fun calcularEstado(sub: SuscripcionEntity): EstadoSuscripcion {
