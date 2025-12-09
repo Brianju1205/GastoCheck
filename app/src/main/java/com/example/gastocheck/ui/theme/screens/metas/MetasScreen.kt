@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -41,11 +42,6 @@ import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.TimeUnit
 
-// Colores del Diseño
-val NeonGreen = Color(0xFF00E676)
-val DarkSurface = Color(0xFF1E1E1E)
-val BackgroundColor = Color(0xFF121212)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MetasScreen(viewModel: MetasViewModel = hiltViewModel()) {
@@ -58,13 +54,13 @@ fun MetasScreen(viewModel: MetasViewModel = hiltViewModel()) {
     var mostrarDialogoAbonar by remember { mutableStateOf(false) }
 
     Scaffold(
-        containerColor = BackgroundColor,
+        containerColor = MaterialTheme.colorScheme.background, // Se adapta al tema
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("Mis Metas", fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = BackgroundColor,
-                    titleContentColor = Color.White
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground
                 )
             )
         },
@@ -74,8 +70,8 @@ fun MetasScreen(viewModel: MetasViewModel = hiltViewModel()) {
                     metaParaEditar = null
                     mostrarPantallaCrear = true
                 },
-                containerColor = NeonGreen,
-                contentColor = Color.Black
+                containerColor = MaterialTheme.colorScheme.primary, // Usa el color principal del tema
+                contentColor = MaterialTheme.colorScheme.onPrimary
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Nueva Meta")
             }
@@ -83,7 +79,7 @@ fun MetasScreen(viewModel: MetasViewModel = hiltViewModel()) {
     ) { padding ->
         if (metas.isEmpty()) {
             Box(modifier = Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No tienes metas activas", color = Color.Gray)
+                Text("No tienes metas activas", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else {
             LazyColumn(
@@ -94,6 +90,7 @@ fun MetasScreen(viewModel: MetasViewModel = hiltViewModel()) {
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 contentPadding = PaddingValues(bottom = 80.dp)
             ) {
+                // Ordenamos para que la más reciente (por ID) salga primero, si el DAO no lo hace
                 items(metas) { meta ->
                     MetaItemCard(
                         meta = meta,
@@ -134,9 +131,8 @@ fun MetasScreen(viewModel: MetasViewModel = hiltViewModel()) {
         }
     }
 
-    // DIALOGO DE DETALLES E HISTORIAL
+    // DIALOGO DETALLES
     if (metaSeleccionadaDetalle != null && !mostrarDialogoAbonar) {
-        // Obtenemos el historial de abonos para la meta seleccionada
         val historialAbonos by viewModel.obtenerHistorialAbonos(metaSeleccionadaDetalle!!.id)
             .collectAsState(initial = emptyList())
 
@@ -171,11 +167,6 @@ fun MetasScreen(viewModel: MetasViewModel = hiltViewModel()) {
             onConfirm = { monto ->
                 viewModel.abonarAMeta(metaSeleccionadaDetalle!!, monto)
                 mostrarDialogoAbonar = false
-                // No cerramos el detalle, solo el dialogo de abonar, para ver el historial actualizado
-                // Pero como metaSeleccionadaDetalle se usa para mostrar el detalle,
-                // si queremos volver al detalle debemos asegurarnos de que no sea null.
-                // La lógica actual lo pone a null al cerrar este dialogo.
-                // Si quieres volver al detalle, comenta la linea de abajo.
                 metaSeleccionadaDetalle = null
             }
         )
@@ -183,8 +174,89 @@ fun MetasScreen(viewModel: MetasViewModel = hiltViewModel()) {
 }
 
 // -------------------------------------------------------------------------
-// COMPONENTES UI
+// COMPONENTES UI ADAPTABLES AL TEMA
 // -------------------------------------------------------------------------
+
+@Composable
+fun MetaItemCard(meta: MetaEntity, onClick: () -> Unit, onAbonarClick: () -> Unit) {
+    val progreso = if (meta.montoObjetivo > 0) (meta.montoAhorrado / meta.montoObjetivo).toFloat().coerceIn(0f, 1f) else 0f
+    val porcentaje = (progreso * 100).toInt()
+
+    // Usamos colores del tema
+    val colorPrimario = MaterialTheme.colorScheme.primary
+    val colorFondoCard = MaterialTheme.colorScheme.surfaceVariant
+
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = colorFondoCard),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val iconoVector = getIconoByName(meta.icono)
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(colorPrimario.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(iconoVector, null, tint = colorPrimario, modifier = Modifier.size(24.dp))
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(meta.nombre, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("En progreso", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                    }
+                }
+                Text("$porcentaje%", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // BARRA PROGRESO
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(12.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)) // Fondo grisáceo adaptable
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(progreso)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(50))
+                        .background(colorPrimario)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                "${CurrencyUtils.formatCurrency(meta.montoAhorrado)} / ${CurrencyUtils.formatCurrency(meta.montoObjetivo)}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            )
+            Spacer(modifier = Modifier.height(20.dp))
+            Button(
+                onClick = onAbonarClick,
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = colorPrimario, contentColor = MaterialTheme.colorScheme.onPrimary),
+                enabled = progreso < 1.0f
+            ) {
+                Text(if (progreso >= 1.0f) "Completada" else "Abonar Dinero", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            }
+        }
+    }
+}
 
 @Composable
 fun DetalleMetaOpcionesDialog(
@@ -199,13 +271,16 @@ fun DetalleMetaOpcionesDialog(
     var mostrarConfirmacionBorrar by remember { mutableStateOf(false) }
     var abonoParaEditar by remember { mutableStateOf<AbonoEntity?>(null) }
 
-    // Cálculo de días restantes
+    val colorPrimario = MaterialTheme.colorScheme.primary
+    val colorTexto = MaterialTheme.colorScheme.onSurface
+
+    // Cálculo días
     val diasRestantesTexto = remember(meta.fechaLimite) {
         if (meta.fechaLimite != null && meta.fechaLimite > 0) {
             val hoy = System.currentTimeMillis()
             val diferencia = meta.fechaLimite - hoy
             if (diferencia > 0) {
-                val dias = java.util.concurrent.TimeUnit.MILLISECONDS.toDays(diferencia)
+                val dias = TimeUnit.MILLISECONDS.toDays(diferencia)
                 "$dias días restantes"
             } else {
                 "Fecha límite vencida"
@@ -215,101 +290,80 @@ fun DetalleMetaOpcionesDialog(
         }
     }
 
-    // DIALOGO PARA EDITAR UN ABONO ESPECÍFICO
     if (abonoParaEditar != null) {
         DialogoEditarAbono(
             abono = abonoParaEditar!!,
             onDismiss = { abonoParaEditar = null },
-            onConfirm = { nuevoMonto ->
-                onEditarAbono(abonoParaEditar!!, nuevoMonto)
-                abonoParaEditar = null
-            }
+            onConfirm = { nuevoMonto -> onEditarAbono(abonoParaEditar!!, nuevoMonto); abonoParaEditar = null }
         )
     }
 
     if (mostrarConfirmacionBorrar) {
-        // ... (Este bloque de confirmación queda igual)
         AlertDialog(
             onDismissRequest = { mostrarConfirmacionBorrar = false },
-            containerColor = DarkSurface,
-            title = { Text("¿Eliminar Meta?", color = Color.White, fontWeight = FontWeight.Bold) },
-            text = { Text("Se perderá todo el historial de esta meta.", color = Color.Gray) },
+            title = { Text("¿Eliminar Meta?") },
+            text = { Text("Se perderá todo el historial de esta meta.") },
             confirmButton = {
                 Button(onClick = onEliminar, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) {
-                    Text("Eliminar", color = Color.White)
+                    Text("Eliminar")
                 }
             },
-            dismissButton = { TextButton(onClick = { mostrarConfirmacionBorrar = false }) { Text("Cancelar", color = Color.Gray) } }
+            dismissButton = { TextButton(onClick = { mostrarConfirmacionBorrar = false }) { Text("Cancelar") } }
         )
     } else {
-        // --- DIÁLOGO PRINCIPAL AJUSTADO ---
         Dialog(onDismissRequest = onDismiss) {
             Card(
-                colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 shape = RoundedCornerShape(24.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .wrapContentHeight() // IMPORTANTE: Se ajusta al contenido
+                modifier = Modifier.fillMaxWidth().wrapContentHeight()
             ) {
                 Column(modifier = Modifier.padding(24.dp)) {
-                    // 1. ENCABEZADO
+                    // HEADER
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(getIconoByName(meta.icono), null, tint = NeonGreen, modifier = Modifier.size(32.dp))
+                        Icon(getIconoByName(meta.icono), null, tint = colorPrimario, modifier = Modifier.size(32.dp))
                         Spacer(Modifier.width(12.dp))
-                        Text(meta.nombre, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                        Text(meta.nombre, color = colorTexto, fontWeight = FontWeight.Bold, fontSize = 20.sp)
                     }
 
                     Spacer(Modifier.height(16.dp))
 
-                    // 2. RESUMEN
-                    Text("Objetivo: ${CurrencyUtils.formatCurrency(meta.montoObjetivo)}", color = Color.White)
-                    Text("Ahorrado: ${CurrencyUtils.formatCurrency(meta.montoAhorrado)}", color = NeonGreen)
+                    // RESUMEN
+                    Text("Objetivo: ${CurrencyUtils.formatCurrency(meta.montoObjetivo)}", color = colorTexto)
+                    Text("Ahorrado: ${CurrencyUtils.formatCurrency(meta.montoAhorrado)}", color = colorPrimario, fontWeight = FontWeight.Bold)
 
                     Spacer(Modifier.height(12.dp))
 
-                    // 3. INFO EXTRA (Días y Nota)
+                    // INFO EXTRA
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         if (diasRestantesTexto != null) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.CalendarToday, null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.CalendarToday, null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(8.dp))
-                                Text(diasRestantesTexto, color = Color.Gray, fontSize = 14.sp)
+                                Text(diasRestantesTexto, color = MaterialTheme.colorScheme.outline, fontSize = 14.sp)
                             }
                         }
 
                         if (meta.nota.isNotEmpty()) {
                             Row(verticalAlignment = Alignment.Top) {
-                                Icon(Icons.Default.Description, null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.Description, null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(8.dp))
-                                Text(meta.nota, color = Color.Gray, fontSize = 14.sp, maxLines = 3)
+                                Text(meta.nota, color = MaterialTheme.colorScheme.outline, fontSize = 14.sp, maxLines = 3)
                             }
-                        } else {
-                            Text("Sin notas.", color = Color.Gray.copy(alpha = 0.5f), fontSize = 12.sp)
                         }
                     }
 
                     Spacer(Modifier.height(16.dp))
-                    Divider(color = Color.Gray.copy(alpha = 0.3f))
+                    Divider(color = MaterialTheme.colorScheme.outlineVariant)
                     Spacer(Modifier.height(16.dp))
 
-                    // 4. HISTORIAL DE ABONOS (MÁXIMO 3)
-                    Text("Historial (Últimos 3)", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    // HISTORIAL (Max 3)
+                    Text("Historial (Últimos 3)", color = colorTexto, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(8.dp))
 
                     if (historialAbonos.isEmpty()) {
-                        // Mensaje pequeño si está vacío
-                        Text(
-                            "Sin abonos recientes",
-                            color = Color.Gray.copy(alpha = 0.5f),
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
+                        Text("Sin abonos recientes", color = MaterialTheme.colorScheme.outline, fontSize = 12.sp, modifier = Modifier.padding(vertical = 8.dp))
                     } else {
-                        // Usamos Column normal en lugar de LazyColumn para que se ajuste la altura
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            // TOMAMOS SOLO LOS PRIMEROS 3
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             historialAbonos.take(3).forEach { abono ->
                                 ItemHistorialAbono(abono = abono, onEditClick = { abonoParaEditar = abono })
                             }
@@ -318,20 +372,19 @@ fun DetalleMetaOpcionesDialog(
 
                     Spacer(Modifier.height(24.dp))
 
-                    // 5. BOTONES
+                    // BOTONES
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TextButton(onClick = onDismiss) { Text("Cerrar", color = Color.Gray) }
-
+                        TextButton(onClick = onDismiss) { Text("Cerrar") }
                         Row {
-                            IconButton(onClick = onEditar) { Icon(Icons.Default.Edit, null, tint = Color.White) }
+                            IconButton(onClick = onEditar) { Icon(Icons.Default.Edit, null, tint = colorTexto) }
                             IconButton(onClick = { mostrarConfirmacionBorrar = true }) { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }
                             Button(
                                 onClick = onAbonar,
-                                colors = ButtonDefaults.buttonColors(containerColor = NeonGreen, contentColor = Color.Black),
+                                colors = ButtonDefaults.buttonColors(containerColor = colorPrimario, contentColor = MaterialTheme.colorScheme.onPrimary),
                                 shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier.padding(start = 8.dp)
                             ) {
@@ -350,18 +403,18 @@ fun ItemHistorialAbono(abono: AbonoEntity, onEditClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
             .padding(12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column {
-            Text(CurrencyUtils.formatCurrency(abono.monto), color = Color.White, fontWeight = FontWeight.Bold)
+            Text(CurrencyUtils.formatCurrency(abono.monto), color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
             val fechaStr = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(Date(abono.fecha))
-            Text(fechaStr, color = Color.Gray, fontSize = 12.sp)
+            Text(fechaStr, color = MaterialTheme.colorScheme.outline, fontSize = 12.sp)
         }
         IconButton(onClick = onEditClick, modifier = Modifier.size(32.dp)) {
-            Icon(Icons.Default.Edit, null, tint = NeonGreen, modifier = Modifier.size(18.dp))
+            Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
         }
     }
 }
@@ -371,83 +424,24 @@ fun DialogoEditarAbono(abono: AbonoEntity, onDismiss: () -> Unit, onConfirm: (Do
     var montoStr by remember { mutableStateOf(abono.monto.toString()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = DarkSurface,
-        title = { Text("Corregir Abono", color = Color.White) },
+        title = { Text("Corregir Abono") },
         text = {
             Column {
-                Text("Ingresa el monto correcto:", color = Color.Gray, fontSize = 14.sp)
+                Text("Ingresa el monto correcto:", fontSize = 14.sp)
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = montoStr,
                     onValueChange = { montoStr = it },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = NeonGreen,
-                        unfocusedBorderColor = Color.Gray,
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
-                    ),
                     singleLine = true
                 )
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    val m = montoStr.toDoubleOrNull()
-                    if (m != null && m >= 0) onConfirm(m)
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = NeonGreen, contentColor = Color.Black)
-            ) { Text("Guardar") }
+            Button(onClick = { val m = montoStr.toDoubleOrNull(); if (m != null && m >= 0) onConfirm(m) }) { Text("Guardar") }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancelar", color = Color.Gray) }
-        }
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
     )
-}
-
-// --- RESTO DE COMPONENTES (MetaItemCard, PantallaCrearEditarMeta, etc.) ---
-// Asegúrate de incluir aquí el resto del código que ya tenías (MetaItemCard, PantallaCrearEditarMeta, getIconoByName, etc.)
-// No los repito para no hacer la respuesta demasiado larga, pero DEBEN estar en el archivo.
-
-@Composable
-fun MetaItemCard(meta: MetaEntity, onClick: () -> Unit, onAbonarClick: () -> Unit) {
-    // ... (El código de MetaItemCard que te di en la respuesta anterior) ...
-    val progreso = if (meta.montoObjetivo > 0) (meta.montoAhorrado / meta.montoObjetivo).toFloat().coerceIn(0f, 1f) else 0f
-    val porcentaje = (progreso * 100).toInt()
-
-    Card(
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = DarkSurface),
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    val iconoVector = getIconoByName(meta.icono)
-                    Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(NeonGreen.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
-                        Icon(iconoVector, null, tint = NeonGreen, modifier = Modifier.size(24.dp))
-                    }
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column {
-                        Text(meta.nombre, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.White)
-                        Text("En progreso", fontSize = 12.sp, color = Color.Gray)
-                    }
-                }
-                Text("$porcentaje%", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.White)
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            Box(modifier = Modifier.fillMaxWidth().height(12.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.1f))) {
-                Box(modifier = Modifier.fillMaxWidth(progreso).fillMaxHeight().clip(RoundedCornerShape(50)).background(NeonGreen))
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("${CurrencyUtils.formatCurrency(meta.montoAhorrado)} / ${CurrencyUtils.formatCurrency(meta.montoObjetivo)}", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
-            Spacer(modifier = Modifier.height(20.dp))
-            Button(onClick = onAbonarClick, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = NeonGreen, contentColor = Color.Black), enabled = progreso < 1.0f) {
-                Text(if (progreso >= 1.0f) "Completada" else "Abonar Dinero", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            }
-        }
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -458,8 +452,6 @@ fun PantallaCrearEditarMeta(
     onDismiss: () -> Unit,
     onConfirm: (String, Double, String, Date?, Int, String) -> Unit
 ) {
-    // ... (Mismo código de PantallaCrearEditarMeta de la respuesta anterior) ...
-    // Copialo tal cual lo tenías, no ha cambiado la lógica de crear/editar la meta en sí, solo agregamos historial.
     var nombre by remember { mutableStateOf(metaExistente?.nombre ?: "") }
     var objetivo by remember { mutableStateOf(metaExistente?.montoObjetivo?.toString() ?: "") }
     var iconoSeleccionado by remember { mutableStateOf(metaExistente?.icono ?: "Savings") }
@@ -467,63 +459,235 @@ fun PantallaCrearEditarMeta(
     var cuentaSeleccionadaId by remember { mutableStateOf(metaExistente?.cuentaId ?: if (cuentas.isNotEmpty()) cuentas.first().id else -1) }
     var nota by remember { mutableStateOf(metaExistente?.nota ?: "") }
 
-    val iconosDisponibles = listOf("Savings" to Icons.Default.Savings, "DirectionsCar" to Icons.Default.DirectionsCar, "TwoWheeler" to Icons.Default.TwoWheeler, "Home" to Icons.Default.Home, "Flight" to Icons.Default.Flight, "Smartphone" to Icons.Default.Smartphone, "Computer" to Icons.Default.Computer, "School" to Icons.Default.School, "Pets" to Icons.Default.Pets, "ShoppingBag" to Icons.Default.ShoppingBag)
+    val iconosDisponibles = listOf("Savings", "DirectionsCar", "TwoWheeler", "Home", "Flight", "Smartphone", "Computer", "School", "Pets", "ShoppingBag")
+
     val context = LocalContext.current
     val calendar = Calendar.getInstance()
-    val datePickerDialog = DatePickerDialog(context, { _: DatePicker, year: Int, month: Int, day: Int -> val cal = Calendar.getInstance(); cal.set(year, month, day); fechaSeleccionada = cal.time }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH))
+    val datePickerDialog = DatePickerDialog(context, { _: DatePicker, year: Int, month: Int, day: Int ->
+        val cal = Calendar.getInstance()
+        cal.set(year, month, day)
+        fechaSeleccionada = cal.time
+    }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH))
+
     var menuCuentasExpanded by remember { mutableStateOf(false) }
 
-    Scaffold(containerColor = BackgroundColor, topBar = { CenterAlignedTopAppBar(title = { Text(if (metaExistente == null) "Agregar Meta" else "Editar Meta", fontWeight = FontWeight.Bold, color = Color.White) }, navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null, tint = Color.White) } }, colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = BackgroundColor)) }) { padding ->
-        Column(modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 24.dp).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+    // Colores tema
+    val colorFondo = MaterialTheme.colorScheme.background
+    val colorSurface = MaterialTheme.colorScheme.surfaceVariant
+    val colorPrimario = MaterialTheme.colorScheme.primary
+
+    Scaffold(
+        containerColor = colorFondo,
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text(if (metaExistente == null) "Agregar Meta" else "Editar Meta", fontWeight = FontWeight.Bold) },
+                navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) } },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = colorFondo)
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .padding(horizontal = 24.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             Spacer(modifier = Modifier.height(24.dp))
-            Box(modifier = Modifier.size(80.dp).border(2.dp, NeonGreen.copy(alpha = 0.5f), CircleShape).padding(4.dp).clip(CircleShape).background(Color.Transparent), contentAlignment = Alignment.Center) {
-                Icon(getIconoByName(iconoSeleccionado), null, tint = NeonGreen, modifier = Modifier.size(40.dp))
+
+            // ICONO
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .border(2.dp, colorPrimario.copy(alpha = 0.5f), CircleShape)
+                    .padding(4.dp)
+                    .clip(CircleShape)
+                    .background(Color.Transparent),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(getIconoByName(iconoSeleccionado), null, tint = colorPrimario, modifier = Modifier.size(40.dp))
             }
-            Spacer(modifier = Modifier.height(12.dp)); Text("Seleccionar Icono", fontSize = 14.sp, color = Color.Gray); Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+            Text("Seleccionar Icono", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(modifier = Modifier.height(12.dp))
+
             LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
-                items(iconosDisponibles) { (nombre, vector) ->
+                items(iconosDisponibles.map { it to getIconoByName(it) }) { (nombre, vector) ->
                     val isSelected = nombre == iconoSeleccionado
-                    Box(modifier = Modifier.size(50.dp).clip(RoundedCornerShape(12.dp)).background(if (isSelected) NeonGreen else DarkSurface).clickable { iconoSeleccionado = nombre }, contentAlignment = Alignment.Center) { Icon(imageVector = vector, contentDescription = null, tint = if (isSelected) Color.Black else Color.Gray) }
+                    Box(
+                        modifier = Modifier
+                            .size(50.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isSelected) colorPrimario else colorSurface)
+                            .clickable { iconoSeleccionado = nombre },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(imageVector = vector, contentDescription = null, tint = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
+
             Spacer(modifier = Modifier.height(32.dp))
-            InputLabel("Nombre de la Meta"); CampoTextoDark(value = nombre, onValueChange = { nombre = it }, placeholder = "Ej. Viaje")
+
+            InputLabel("Nombre de la Meta")
+            CampoTextoTematico(value = nombre, onValueChange = { nombre = it }, placeholder = "Ej. Viaje")
+
             Spacer(modifier = Modifier.height(20.dp))
-            InputLabel("Monto Objetivo"); CampoTextoDark(value = objetivo, onValueChange = { objetivo = it }, placeholder = "$ 0.00", keyboardType = KeyboardType.Number)
+
+            InputLabel("Monto Objetivo")
+            CampoTextoTematico(value = objetivo, onValueChange = { objetivo = it }, placeholder = "$ 0.00", keyboardType = KeyboardType.Number)
+
             Spacer(modifier = Modifier.height(20.dp))
+
             InputLabel("Cuenta Asociada")
             Box(modifier = Modifier.fillMaxWidth()) {
                 val nombreCuenta = cuentas.find { it.id == cuentaSeleccionadaId }?.nombre ?: "Seleccionar"
-                Row(modifier = Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(12.dp)).background(DarkSurface).clickable { menuCuentasExpanded = true }.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) { Text(nombreCuenta, color = Color.White); Icon(Icons.Default.ArrowDropDown, null, tint = Color.Gray) }
-                DropdownMenu(expanded = menuCuentasExpanded, onDismissRequest = { menuCuentasExpanded = false }) { cuentas.forEach { c -> DropdownMenuItem(text = { Text(c.nombre) }, onClick = { cuentaSeleccionadaId = c.id; menuCuentasExpanded = false }) } }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(colorSurface)
+                        .clickable { menuCuentasExpanded = true }
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(nombreCuenta, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(Icons.Default.ArrowDropDown, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                DropdownMenu(expanded = menuCuentasExpanded, onDismissRequest = { menuCuentasExpanded = false }) {
+                    cuentas.forEach { c -> DropdownMenuItem(text = { Text(c.nombre) }, onClick = { cuentaSeleccionadaId = c.id; menuCuentasExpanded = false }) }
+                }
             }
+
             Spacer(modifier = Modifier.height(20.dp))
+
             InputLabel("Fecha Límite")
-            Row(modifier = Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(12.dp)).background(DarkSurface).clickable { datePickerDialog.show() }.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(colorSurface)
+                    .clickable { datePickerDialog.show() }
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
                 val textoFecha = if(fechaSeleccionada != null) DateUtils.formatearFechaAmigable(fechaSeleccionada!!) else "Seleccionar fecha"
-                Text(textoFecha, color = if(fechaSeleccionada != null) Color.White else Color.Gray); Icon(Icons.Default.CalendarToday, null, tint = Color.Gray)
+                val textColor = if(fechaSeleccionada != null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                Text(textoFecha, color = textColor)
+                Icon(Icons.Default.CalendarToday, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+
             Spacer(modifier = Modifier.height(20.dp))
-            InputLabel("Notas"); CampoTextoDark(value = nota, onValueChange = { nota = it }, placeholder = "Descripción...", singleLine = false, modifier = Modifier.height(80.dp))
+
+            InputLabel("Notas")
+            CampoTextoTematico(value = nota, onValueChange = { nota = it }, placeholder = "Descripción...", singleLine = false, modifier = Modifier.height(80.dp))
+
             Spacer(modifier = Modifier.height(32.dp))
-            Button(onClick = { val obj = objetivo.toDoubleOrNull() ?: 0.0; if (nombre.isNotEmpty() && obj > 0) { onConfirm(nombre, obj, iconoSeleccionado, fechaSeleccionada, cuentaSeleccionadaId, nota) } }, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = NeonGreen, contentColor = Color.Black)) { Text(if (metaExistente == null) "Crear Meta" else "Guardar Cambios", fontWeight = FontWeight.Bold, fontSize = 16.sp) }
+
+            Button(
+                onClick = {
+                    val obj = objetivo.toDoubleOrNull() ?: 0.0
+                    if (nombre.isNotEmpty() && obj > 0) {
+                        onConfirm(nombre, obj, iconoSeleccionado, fechaSeleccionada, cuentaSeleccionadaId, nota)
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = colorPrimario, contentColor = MaterialTheme.colorScheme.onPrimary)
+            ) {
+                Text(if (metaExistente == null) "Crear Meta" else "Guardar Cambios", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            }
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }
 
+// Reemplazamos "CampoTextoDark" por uno temático
 @Composable
-fun CampoTextoDark(value: String, onValueChange: (String) -> Unit, placeholder: String, keyboardType: KeyboardType = KeyboardType.Text, singleLine: Boolean = true, modifier: Modifier = Modifier) {
-    BasicTextField(value = value, onValueChange = onValueChange, textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 16.sp), keyboardOptions = KeyboardOptions(keyboardType = keyboardType), singleLine = singleLine, cursorBrush = androidx.compose.ui.graphics.SolidColor(NeonGreen), modifier = modifier.fillMaxWidth(), decorationBox = { innerTextField -> Box(modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(DarkSurface).padding(horizontal = 16.dp, vertical = 16.dp)) { if (value.isEmpty()) Text(placeholder, color = Color.Gray); innerTextField() } })
+fun CampoTextoTematico(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    singleLine: Boolean = true,
+    modifier: Modifier = Modifier
+) {
+    val colorCursor = MaterialTheme.colorScheme.primary
+    val colorTexto = MaterialTheme.colorScheme.onSurfaceVariant
+    val colorFondo = MaterialTheme.colorScheme.surfaceVariant
+
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        textStyle = androidx.compose.ui.text.TextStyle(color = colorTexto, fontSize = 16.sp),
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        singleLine = singleLine,
+        cursorBrush = SolidColor(colorCursor),
+        modifier = modifier.fillMaxWidth(),
+        decorationBox = { innerTextField ->
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(colorFondo)
+                    .padding(horizontal = 16.dp, vertical = 16.dp)
+            ) {
+                if (value.isEmpty()) Text(placeholder, color = colorTexto.copy(alpha = 0.5f))
+                innerTextField()
+            }
+        }
+    )
 }
 
 @Composable
 fun DialogoAbonar(meta: MetaEntity, onDismiss: () -> Unit, onConfirm: (Double) -> Unit) {
     var monto by remember { mutableStateOf("") }
-    AlertDialog(onDismissRequest = onDismiss, containerColor = DarkSurface, title = { Text("Abonar a ${meta.nombre}", color = Color.White) }, text = { OutlinedTextField(value = monto, onValueChange = { monto = it }, label = { Text("Cantidad") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NeonGreen, unfocusedBorderColor = Color.Gray, focusedLabelColor = NeonGreen, unfocusedLabelColor = Color.Gray, focusedTextColor = Color.White, unfocusedTextColor = Color.White)) }, confirmButton = { Button(onClick = { val m = monto.toDoubleOrNull() ?: 0.0; if (m > 0) onConfirm(m) }, colors = ButtonDefaults.buttonColors(containerColor = NeonGreen, contentColor = Color.Black)) { Text("Abonar") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar", color = Color.Gray) } })
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Abonar a ${meta.nombre}") },
+        text = {
+            OutlinedTextField(
+                value = monto,
+                onValueChange = { monto = it },
+                label = { Text("Cantidad") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = { val m = monto.toDoubleOrNull() ?: 0.0; if (m > 0) onConfirm(m) }
+            ) { Text("Abonar") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+    )
 }
 
 @Composable
-fun InputLabel(text: String) { Text(text = text, color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp, start = 4.dp)) }
+fun InputLabel(text: String) {
+    Text(
+        text = text,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        fontSize = 14.sp,
+        fontWeight = FontWeight.Medium,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp, start = 4.dp)
+    )
+}
 
-fun getIconoByName(nombre: String): ImageVector { return when (nombre) { "DirectionsCar" -> Icons.Default.DirectionsCar; "TwoWheeler" -> Icons.Default.TwoWheeler; "Home" -> Icons.Default.Home; "Flight" -> Icons.Default.Flight; "Smartphone" -> Icons.Default.Smartphone; "Computer" -> Icons.Default.Computer; "School" -> Icons.Default.School; "Pets" -> Icons.Default.Pets; "ShoppingBag" -> Icons.Default.ShoppingBag; else -> Icons.Default.Savings } }
+fun getIconoByName(nombre: String): ImageVector {
+    return when (nombre) {
+        "DirectionsCar" -> Icons.Default.DirectionsCar
+        "TwoWheeler" -> Icons.Default.TwoWheeler
+        "Home" -> Icons.Default.Home
+        "Flight" -> Icons.Default.Flight
+        "Smartphone" -> Icons.Default.Smartphone
+        "Computer" -> Icons.Default.Computer
+        "School" -> Icons.Default.School
+        "Pets" -> Icons.Default.Pets
+        "ShoppingBag" -> Icons.Default.ShoppingBag
+        else -> Icons.Default.Savings
+    }
+}
