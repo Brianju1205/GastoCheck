@@ -7,6 +7,7 @@ import androidx.room.TypeConverters
 import com.example.gastocheck.data.database.dao.AbonoDao
 import com.example.gastocheck.data.database.dao.BalanceSnapshotDao
 import com.example.gastocheck.data.database.dao.CuentaDao
+import com.example.gastocheck.data.database.dao.HistorialPagoDao
 import com.example.gastocheck.data.database.dao.MetaDao
 import com.example.gastocheck.data.database.dao.SuscripcionDao // <--- Correcto
 import com.example.gastocheck.data.database.dao.TransaccionDao
@@ -17,6 +18,7 @@ import com.example.gastocheck.data.database.entity.BalanceSnapshotEntity
 import com.example.gastocheck.data.database.entity.CuentaEntity
 import com.example.gastocheck.data.database.entity.MetaEntity
 import com.example.gastocheck.data.database.entity.SuscripcionEntity // <--- ESTE FALTABA
+import com.example.gastocheck.data.database.entity.HistorialPagoEntity
 import com.example.gastocheck.data.database.entity.TransaccionEntity
 import com.example.gastocheck.data.database.entity.VozPendienteEntity
 
@@ -28,9 +30,10 @@ import com.example.gastocheck.data.database.entity.VozPendienteEntity
         CuentaEntity::class,
         BalanceSnapshotEntity::class,
         AbonoEntity::class,
-        SuscripcionEntity::class // <--- Nueva tabla registrada
+        SuscripcionEntity::class,
+        HistorialPagoEntity::class
     ],
-    version = 14, // <--- Versión actualizada
+    version = 15, // <--- Versión actualizada
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -44,4 +47,5 @@ abstract class AppDatabase : RoomDatabase() {
 
     // Nuevo DAO para suscripciones
     abstract fun suscripcionDao(): SuscripcionDao
+    abstract fun historialPagoDao(): HistorialPagoDao
 }

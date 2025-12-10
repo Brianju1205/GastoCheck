@@ -8,6 +8,7 @@ import com.example.gastocheck.data.database.AppDatabase
 import com.example.gastocheck.data.database.dao.AbonoDao // <--- 1. IMPORTANTE: Importar el nuevo DAO
 import com.example.gastocheck.data.database.dao.BalanceSnapshotDao
 import com.example.gastocheck.data.database.dao.CuentaDao
+import com.example.gastocheck.data.database.dao.HistorialPagoDao
 import com.example.gastocheck.data.database.dao.MetaDao
 import com.example.gastocheck.data.database.dao.SuscripcionDao
 import com.example.gastocheck.data.database.dao.TransaccionDao
@@ -117,5 +118,11 @@ object AppModule {
     @Singleton
     fun provideSuscripcionDao(database: AppDatabase): SuscripcionDao {
         return database.suscripcionDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideHistorialPagoDao(database: AppDatabase): HistorialPagoDao {
+        return database.historialPagoDao()
     }
 }
