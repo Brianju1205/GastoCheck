@@ -42,10 +42,12 @@ import com.example.gastocheck.data.database.entity.CuentaEntity
 import com.example.gastocheck.data.database.entity.SuscripcionEntity
 import com.example.gastocheck.ui.theme.util.CurrencyUtils
 import com.example.gastocheck.ui.theme.util.DateUtils
+import com.example.gastocheck.ui.theme.util.IconoUtils
+import com.example.gastocheck.ui.theme.util.ServiceColorUtils
 import java.util.Calendar
 import java.util.Date
 
-// Colores del tema
+// Colores del tema (para fallback)
 val GreenNeon = Color(0xFF00E676)
 val DarkBg = Color(0xFF121212)
 val CardBg = Color(0xFF1E1E1E)
@@ -65,7 +67,6 @@ fun SuscripcionesScreen(viewModel: SuscripcionesViewModel = hiltViewModel()) {
     var suscripcionEditar by remember { mutableStateOf<SuscripcionEntity?>(null) }
     var suscripcionDetalle by remember { mutableStateOf<SuscripcionEntity?>(null) }
 
-    // Permisos de Notificación
     val launcherPermiso = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
         onResult = { }
@@ -97,13 +98,10 @@ fun SuscripcionesScreen(viewModel: SuscripcionesViewModel = hiltViewModel()) {
         }
     ) { padding ->
         LazyColumn(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
+            modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp),
             contentPadding = PaddingValues(bottom = 80.dp)
         ) {
-            // 1. TARJETA RESUMEN MENSUAL Y ADVERTENCIAS
+            // 1. TARJETA RESUMEN
             item {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -115,8 +113,6 @@ fun SuscripcionesScreen(viewModel: SuscripcionesViewModel = hiltViewModel()) {
                         Row(verticalAlignment = Alignment.Bottom) {
                             Text(CurrencyUtils.formatCurrency(totalMensual), fontSize = 36.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                         }
-
-                        // Mensaje de Advertencia Dinámico
                         if (advertenciaState.visible) {
                             Spacer(Modifier.height(12.dp))
                             val colorAviso = if (advertenciaState.esError) MaterialTheme.colorScheme.error else Color(0xFFFFD700)
@@ -130,37 +126,26 @@ fun SuscripcionesScreen(viewModel: SuscripcionesViewModel = hiltViewModel()) {
                 }
             }
 
-            // 2. FILTROS DESLIZABLES
+            // 2. FILTROS
             item {
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                LazyRow(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     val filtros = listOf(FiltroSuscripcion.TODAS to "Ver todas", FiltroSuscripcion.PROXIMAS to "Próximas", FiltroSuscripcion.ATRASADAS to "Atrasadas", FiltroSuscripcion.PAGADAS to "Pagadas", FiltroSuscripcion.CANCELADAS to "Canceladas")
-                    items(filtros) { (filtro, texto) ->
-                        FiltroChip(texto, filtroActual == filtro) { viewModel.cambiarFiltro(filtro) }
-                    }
+                    items(filtros) { (filtro, texto) -> FiltroChip(texto, filtroActual == filtro) { viewModel.cambiarFiltro(filtro) } }
                 }
             }
 
-            // 3. CARRUSEL DE ALERTAS PRÓXIMAS
-            if (alertas.isNotEmpty() &&
-                filtroActual != FiltroSuscripcion.ATRASADAS &&
-                filtroActual != FiltroSuscripcion.PAGADAS &&
-                filtroActual != FiltroSuscripcion.CANCELADAS) {
-
+            // 3. ALERTAS
+            if (alertas.isNotEmpty() && filtroActual != FiltroSuscripcion.ATRASADAS && filtroActual != FiltroSuscripcion.PAGADAS && filtroActual != FiltroSuscripcion.CANCELADAS) {
                 item {
                     Text("Alertas próximas", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.padding(bottom = 12.dp))
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        items(alertas) { sub ->
-                            CardAlertaProxima(sub, viewModel) { suscripcionDetalle = sub }
-                        }
+                        items(alertas) { sub -> CardAlertaProxima(sub, viewModel) { suscripcionDetalle = sub } }
                     }
                     Spacer(Modifier.height(24.dp))
                 }
             }
 
-            // 4. LISTA GENERAL
+            // 4. LISTA
             item {
                 val titulo = when(filtroActual){
                     FiltroSuscripcion.TODAS -> "Todos los servicios"
@@ -169,61 +154,31 @@ fun SuscripcionesScreen(viewModel: SuscripcionesViewModel = hiltViewModel()) {
                     FiltroSuscripcion.PAGADAS -> "Pagadas"
                     FiltroSuscripcion.CANCELADAS -> "Canceladas"
                 }
-                Text(
-                    text = titulo,
-                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.padding(bottom = 12.dp)
-                )
+                Text(titulo, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.padding(bottom = 12.dp))
             }
 
             if (suscripciones.isEmpty()) {
-                item {
-                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                        Text("No hay resultados", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
+                item { Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Text("No hay resultados", color = MaterialTheme.colorScheme.onSurfaceVariant) } }
             } else {
-                items(suscripciones) { sub ->
-                    ItemSuscripcion(sub, viewModel) { suscripcionDetalle = sub }
-                }
+                items(suscripciones) { sub -> ItemSuscripcion(sub, viewModel) { suscripcionDetalle = sub } }
             }
         }
     }
 
-    // --- MODALES ---
-
     if (mostrarCrear) {
-        Dialog(
-            onDismissRequest = { mostrarCrear = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
-        ) {
-            PantallaCrearEditarSuscripcion(
-                existente = suscripcionEditar,
-                cuentas = cuentas,
-                onDismiss = { mostrarCrear = false },
-                onConfirm = { nombre, monto, fecha, frec, icono, cta, nota, recordatorio, hora ->
-                    viewModel.guardarSuscripcion(suscripcionEditar?.id ?: 0, nombre, monto, fecha, frec, icono, cta, nota, recordatorio, hora)
-                    mostrarCrear = false
-                }
-            )
+        Dialog(onDismissRequest = { mostrarCrear = false }, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+            PantallaCrearEditarSuscripcion(existente = suscripcionEditar, cuentas = cuentas, onDismiss = { mostrarCrear = false }, onConfirm = { nombre, monto, fecha, frec, icono, cta, nota, recordatorio, hora -> viewModel.guardarSuscripcion(suscripcionEditar?.id ?: 0, nombre, monto, fecha, frec, icono, cta, nota, recordatorio, hora); mostrarCrear = false })
         }
     }
 
     if (suscripcionDetalle != null) {
         val nombreCuenta = cuentas.find { it.id == suscripcionDetalle!!.cuentaId }?.nombre ?: "Desconocida"
-        DetalleSuscripcionDialog(
-            sub = suscripcionDetalle!!,
-            nombreCuenta = nombreCuenta,
-            viewModel = viewModel,
-            onDismiss = { suscripcionDetalle = null },
-            onEdit = { suscripcionEditar = suscripcionDetalle; suscripcionDetalle = null; mostrarCrear = true },
-            onDelete = { viewModel.borrarSuscripcion(suscripcionDetalle!!); suscripcionDetalle = null }
-        )
+        DetalleSuscripcionDialog(sub = suscripcionDetalle!!, nombreCuenta = nombreCuenta, viewModel = viewModel, onDismiss = { suscripcionDetalle = null }, onEdit = { suscripcionEditar = suscripcionDetalle; suscripcionDetalle = null; mostrarCrear = true }, onDelete = { viewModel.borrarSuscripcion(suscripcionDetalle!!); suscripcionDetalle = null })
     }
 }
 
-// -------------------------------------------------------------------------
-// COMPONENTES UI
-// -------------------------------------------------------------------------
+// ... COMPONENTES UI (FiltroChip, CardAlertaProxima, ItemSuscripcion, DetalleDialog, HistorialDialog, PantallaCrearEditar) ...
+// (Todo este código sigue siendo el mismo que en las versiones anteriores, asegurando que uses IconoUtils y ServiceColorUtils)
 
 @Composable
 fun FiltroChip(texto: String, seleccionado: Boolean, onClick: () -> Unit) {
@@ -232,46 +187,20 @@ fun FiltroChip(texto: String, seleccionado: Boolean, onClick: () -> Unit) {
         shape = RoundedCornerShape(50),
         modifier = Modifier.clickable { onClick() }
     ) {
-        Text(
-            text = texto,
-            color = if (seleccionado) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium
-        )
+        Text(text = texto, color = if (seleccionado) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), fontSize = 12.sp, fontWeight = FontWeight.Medium)
     }
 }
 
 @Composable
 fun CardAlertaProxima(sub: SuscripcionEntity, viewModel: SuscripcionesViewModel, onClick: () -> Unit) {
     val dias = viewModel.diasRestantes(sub.fechaPago)
-    val brandColor = getColorServicio(sub.icono)
-
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier
-            .width(150.dp)
-            .clickable(onClick = onClick)
-            .border(1.dp, Color(0xFFFFD700).copy(alpha = 0.5f), RoundedCornerShape(16.dp))
-    ) {
+    val brandColor = ServiceColorUtils.getColorByName(sub.icono)
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp), modifier = Modifier.width(150.dp).clickable(onClick = onClick).border(1.dp, Color(0xFFFFD700).copy(alpha = 0.5f), RoundedCornerShape(16.dp))) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(brandColor.copy(alpha = 0.2f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(getIconoSuscripcion(sub.icono), null, tint = brandColor, modifier = Modifier.size(20.dp))
-            }
+            Box(modifier = Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).background(brandColor.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) { Icon(IconoUtils.getIconoByName(sub.icono), null, tint = brandColor, modifier = Modifier.size(20.dp)) }
             Spacer(Modifier.height(12.dp))
             Text(sub.nombre, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
-            Text(
-                text = if (dias == 0L) "Vence hoy" else "Vence en $dias días",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text(text = if (dias == 0L) "Vence hoy" else "Vence en $dias días", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
             Text(CurrencyUtils.formatCurrency(sub.monto), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
         }
@@ -281,36 +210,18 @@ fun CardAlertaProxima(sub: SuscripcionEntity, viewModel: SuscripcionesViewModel,
 @Composable
 fun ItemSuscripcion(sub: SuscripcionEntity, viewModel: SuscripcionesViewModel, onClick: () -> Unit) {
     val estado = viewModel.calcularEstado(sub)
-
     val (colorEstado, textoEstado) = when(estado) {
         EstadoSuscripcion.PAGADO -> MaterialTheme.colorScheme.primary to "Pagado"
         EstadoSuscripcion.PENDIENTE -> Color(0xFFFFD700) to "Pendiente"
         EstadoSuscripcion.ATRASADO -> MaterialTheme.colorScheme.error to "Atrasado"
         EstadoSuscripcion.CANCELADO -> MaterialTheme.colorScheme.outline to "Cancelado"
     }
-
     val opacity = if (estado == EstadoSuscripcion.CANCELADO) 0.5f else 1f
-    val brandColor = getColorServicio(sub.icono)
+    val brandColor = ServiceColorUtils.getColorByName(sub.icono)
     val fechaMostrar = if (estado == EstadoSuscripcion.PAGADO) viewModel.calcularProximoPagoProyectado(sub) else sub.fechaPago
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 12.dp)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f * opacity), RoundedCornerShape(16.dp))
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(brandColor.copy(alpha = 0.15f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(getIconoSuscripcion(sub.icono), null, tint = brandColor.copy(alpha = opacity), modifier = Modifier.size(24.dp))
-        }
+    Row(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f * opacity), RoundedCornerShape(16.dp)).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(brandColor.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) { Icon(IconoUtils.getIconoByName(sub.icono), null, tint = brandColor.copy(alpha = opacity), modifier = Modifier.size(24.dp)) }
         Spacer(Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(sub.nombre, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = opacity))
@@ -319,53 +230,35 @@ fun ItemSuscripcion(sub: SuscripcionEntity, viewModel: SuscripcionesViewModel, o
         }
         Column(horizontalAlignment = Alignment.End) {
             Text(CurrencyUtils.formatCurrency(sub.monto), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = opacity))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(colorEstado)); Spacer(Modifier.width(4.dp)); Text(textoEstado, fontSize = 10.sp, color = colorEstado)
-            }
+            Row(verticalAlignment = Alignment.CenterVertically) { Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(colorEstado)); Spacer(Modifier.width(4.dp)); Text(textoEstado, fontSize = 10.sp, color = colorEstado) }
         }
     }
     Spacer(Modifier.height(8.dp))
 }
 
 @Composable
-fun DetalleSuscripcionDialog(
-    sub: SuscripcionEntity,
-    nombreCuenta: String,
-    viewModel: SuscripcionesViewModel,
-    onDismiss: () -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit
-) {
+fun DetalleSuscripcionDialog(sub: SuscripcionEntity, nombreCuenta: String, viewModel: SuscripcionesViewModel, onDismiss: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
     var mostrarConfirmacion by remember { mutableStateOf(false) }
     var mostrarHistorial by remember { mutableStateOf(false) }
     val estadoActual = viewModel.calcularEstado(sub)
-    val brandColor = getColorServicio(sub.icono)
+    val brandColor = ServiceColorUtils.getColorByName(sub.icono)
 
-    // LÓGICA ACTUALIZADA: CIERRA AL SELECCIONAR
     fun cambiar(nuevo: String) {
         when (nuevo) {
             "PAGADO" -> if (estadoActual != EstadoSuscripcion.PAGADO) viewModel.marcarComoPagado(sub)
             "PENDIENTE" -> if (estadoActual == EstadoSuscripcion.PAGADO) viewModel.deshacerPago(sub) else viewModel.cambiarEstadoManual(sub, "PENDIENTE")
             "CANCELADO" -> viewModel.cambiarEstadoManual(sub, "CANCELADO")
         }
-        onDismiss() // <--- CIERRA EL DIÁLOGO AL INSTANTE
+        onDismiss()
     }
 
-    if (mostrarHistorial) {
-        HistorialPagosDialog(sub, viewModel) { mostrarHistorial = false }
-    } else if (mostrarConfirmacion) {
-        AlertDialog(
-            onDismissRequest = { mostrarConfirmacion = false },
-            title = { Text("¿Eliminar Suscripción?") },
-            text = { Text("Se borrará permanentemente.") },
-            confirmButton = { Button(onClick = { onDelete(); mostrarConfirmacion = false }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Eliminar") } },
-            dismissButton = { TextButton(onClick = { mostrarConfirmacion = false }) { Text("Cancelar") } }
-        )
+    if (mostrarHistorial) { HistorialPagosDialog(sub, viewModel) { mostrarHistorial = false } }
+    else if (mostrarConfirmacion) {
+        AlertDialog(onDismissRequest = { mostrarConfirmacion = false }, title = { Text("¿Eliminar Suscripción?") }, text = { Text("Se borrará permanentemente.") }, confirmButton = { Button(onClick = { onDelete(); mostrarConfirmacion = false }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Eliminar") } }, dismissButton = { TextButton(onClick = { mostrarConfirmacion = false }) { Text("Cancelar") } })
     } else {
         AlertDialog(
-            onDismissRequest = onDismiss,
-            containerColor = MaterialTheme.colorScheme.surface,
-            icon = { Icon(getIconoSuscripcion(sub.icono), null, modifier = Modifier.size(48.dp), tint = brandColor) },
+            onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface,
+            icon = { Icon(IconoUtils.getIconoByName(sub.icono), null, modifier = Modifier.size(48.dp), tint = brandColor) },
             title = { Text(sub.nombre, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface) },
             text = {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
@@ -395,7 +288,7 @@ fun DetalleSuscripcionDialog(
 fun HistorialPagosDialog(sub: SuscripcionEntity, viewModel: SuscripcionesViewModel, onBack: () -> Unit) {
     val historial by viewModel.obtenerHistorial(sub.id).collectAsState(initial = emptyList())
     val totalGastado = remember(historial) { historial.sumOf { it.monto } }
-    val brandColor = getColorServicio(sub.icono)
+    val brandColor = ServiceColorUtils.getColorByName(sub.icono)
 
     Dialog(onDismissRequest = onBack) {
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 400.dp, max = 600.dp)) {
@@ -425,6 +318,9 @@ fun HistorialPagosDialog(sub: SuscripcionEntity, viewModel: SuscripcionesViewMod
         }
     }
 }
+
+// ... SelectableStatusButton, PantallaCrearEditarSuscripcion, CampoTextoSuscripcion ...
+// (El resto del código es el mismo, pero lo pego aquí para completar)
 
 @Composable
 fun SelectableStatusButton(selected: Boolean, color: Color, icon: ImageVector, onClick: () -> Unit) {
@@ -462,9 +358,9 @@ fun PantallaCrearEditarSuscripcion(existente: SuscripcionEntity?, cuentas: List<
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     fila.forEach { iconName ->
                         val selected = iconName == icono
-                        val brandColor = getColorServicio(iconName)
+                        val brandColor = ServiceColorUtils.getColorByName(iconName)
                         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { icono = iconName }.width(70.dp)) {
-                            Box(modifier = Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)).background(if (selected) brandColor else MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) { Icon(getIconoSuscripcion(iconName), null, tint = if(selected) Color.Black else brandColor) }
+                            Box(modifier = Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)).background(if (selected) brandColor else MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) { Icon(IconoUtils.getIconoByName(iconName), null, tint = if(selected) Color.Black else brandColor) }
                             Text(iconName, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp), maxLines = 1)
                         }
                     }
@@ -502,12 +398,4 @@ fun PantallaCrearEditarSuscripcion(existente: SuscripcionEntity?, cuentas: List<
 @Composable
 fun CampoTextoSuscripcion(value: String, onValueChange: (String) -> Unit, placeholder: String, keyboardType: KeyboardType = KeyboardType.Text, singleLine: Boolean = true, modifier: Modifier = Modifier) {
     BasicTextField(value = value, onValueChange = onValueChange, textStyle = androidx.compose.ui.text.TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp), keyboardOptions = KeyboardOptions(keyboardType = keyboardType), singleLine = singleLine, cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), modifier = modifier.fillMaxWidth(), decorationBox = { innerTextField -> Box(modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(16.dp)) { if (value.isEmpty()) Text(placeholder, color = MaterialTheme.colorScheme.onSurfaceVariant); innerTextField() } })
-}
-
-fun getIconoSuscripcion(nombre: String): ImageVector {
-    return when(nombre) { "Netflix" -> Icons.Default.Tv; "Spotify" -> Icons.Default.MusicNote; "Youtube" -> Icons.Default.PlayArrow; "Apple" -> Icons.Default.PhoneIphone; "Disney" -> Icons.Default.Star; "HBO" -> Icons.Default.Movie; "Amazon" -> Icons.Default.ShoppingCart; "Figma", "Notion", "Colegio" -> Icons.Default.School; "Agua" -> Icons.Default.WaterDrop; "Luz" -> Icons.Default.Lightbulb; "Gas" -> Icons.Default.LocalFireDepartment; "Internet", "Celular" -> Icons.Default.Wifi; "Gimnasio" -> Icons.Default.FitnessCenter; "Seguro" -> Icons.Default.Security; else -> Icons.Default.CreditCard }
-}
-
-fun getColorServicio(nombre: String): Color {
-    return when(nombre) { "Netflix", "Youtube" -> Color(0xFFE50914); "Spotify" -> Color(0xFF1DB954); "Apple" -> Color(0xFFA2AAAD); "Disney" -> Color(0xFF113CCF); "HBO" -> Color(0xFF9900FF); "Amazon" -> Color(0xFFFF9900); "Figma" -> Color(0xFFF24E1E); "Agua", "Internet" -> Color(0xFF00B0FF); "Luz" -> Color(0xFFFFD600); "Gas" -> Color(0xFFFF5722); else -> Color(0xFF00E676) }
 }

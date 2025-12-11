@@ -46,7 +46,9 @@ import com.example.gastocheck.ui.theme.screens.agregar.AgregarViewModel.EstadoVo
 import com.example.gastocheck.ui.theme.util.CategoriaUtils
 import com.example.gastocheck.ui.theme.util.CurrencyUtils
 import com.example.gastocheck.ui.theme.util.DateUtils
+// IMPORTANTE: Importamos nuestros utils centralizados
 import com.example.gastocheck.ui.theme.util.IconoUtils
+import com.example.gastocheck.ui.theme.util.ServiceColorUtils
 import kotlinx.coroutines.launch
 import java.util.Date
 
@@ -108,7 +110,6 @@ fun HomeScreen(
         }
     }
 
-    // --- DIALOGOS ---
     if (mostrarSelectorRango) {
         val datePickerState = rememberDateRangePickerState()
         DatePickerDialog(
@@ -236,7 +237,7 @@ fun HomeScreen(
                 contentPadding = PaddingValues(bottom = 80.dp)
             ) {
                 when (page) {
-                    0 -> { // --- INICIO ---
+                    0 -> { // INICIO
                         item {
                             Spacer(modifier = Modifier.height(16.dp))
                             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -255,7 +256,6 @@ fun HomeScreen(
                             BalanceCarousel(saldoActual = saldoTotal, historial = historial, onVerMasClick = { onNavegarHistorial(cuentaSeleccionadaId) })
                         }
 
-                        // --- AQUÍ ESTÁ LA ACTUALIZACIÓN DE LA TARJETA DE META ---
                         if (listaMetas.isNotEmpty()) {
                             item {
                                 val m = listaMetas.first()
@@ -263,7 +263,7 @@ fun HomeScreen(
                                     nombre = m.nombre,
                                     ahorrado = m.montoAhorrado,
                                     meta = m.montoObjetivo,
-                                    iconoNombre = m.icono // Pasamos el nombre del ícono
+                                    iconoNombre = m.icono
                                 )
                             }
                         }
@@ -323,7 +323,6 @@ fun HomeScreen(
                             if (listaFiltrada.isNotEmpty()) {
                                 Box(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp), contentAlignment = Alignment.Center) {
                                     if (page == 3) {
-                                        // GRÁFICA TRANSFERENCIAS
                                         val datosCuentas = listaFiltrada.groupBy { t ->
                                             cuentas.find { it.id == t.cuentaId }?.nombre ?: "Desconocida"
                                         }.mapValues { entry -> entry.value.sumOf { it.monto } }
@@ -372,55 +371,7 @@ fun HomeScreen(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun ItemTransferencia(
-    transaccion: TransaccionEntity,
-    cuentaOrigen: CuentaEntity?,
-    onItemClick: () -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit
-) {
-    val nombreDestino = transaccion.notaCompleta.replace("Transferencia a ", "")
-    var mostrarMenu by remember { mutableStateOf(false) }
-
-    val colorCuenta = try {
-        Color(android.graphics.Color.parseColor(cuentaOrigen?.colorHex ?: "#00E676"))
-    } catch (e: Exception) { MaterialTheme.colorScheme.primary }
-
-    val iconoCuenta = if(cuentaOrigen != null) IconoUtils.getIconoByName(cuentaOrigen.icono) else Icons.Default.SwapHoriz
-
-    val textColor = MaterialTheme.colorScheme.onBackground
-    val iconBgColor = colorCuenta.copy(alpha = 0.2f)
-    val arrowColor = MaterialTheme.colorScheme.outline
-    val montoColor = Color(0xFF2979FF)
-    val subTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-
-    Box(modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onItemClick, onLongClick = { mostrarMenu = true }).padding(vertical = 8.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(iconBgColor), contentAlignment = Alignment.Center) {
-                Icon(imageVector = iconoCuenta, contentDescription = null, tint = colorCuenta)
-            }
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = cuentaOrigen?.nombre ?: "Origen", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = textColor)
-                    PaddingValues(horizontal = 4.dp)
-                    Icon(imageVector = Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(14.dp), tint = arrowColor)
-                    PaddingValues(horizontal = 4.dp)
-                    Text(text = nombreDestino, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = textColor)
-                }
-                Text(text = "Transferencia", style = MaterialTheme.typography.bodySmall, color = subTextColor)
-            }
-            Text(text = "-${CurrencyUtils.formatCurrency(transaccion.monto)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = montoColor)
-        }
-        DropdownMenu(expanded = mostrarMenu, onDismissRequest = { mostrarMenu = false }) {
-            DropdownMenuItem(text = { Text("Editar") }, onClick = { mostrarMenu = false; onEdit() }, leadingIcon = { Icon(Icons.Default.Edit, null) })
-            DropdownMenuItem(text = { Text("Eliminar") }, onClick = { mostrarMenu = false; onDelete() }, leadingIcon = { Icon(Icons.Default.Delete, null) })
-        }
-    }
-    Divider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), thickness = 0.5.dp)
-}
+// ... ItemTransferencia (sin cambios mayores) ...
 
 @Composable
 fun DetalleTransaccionDialog(
@@ -431,11 +382,17 @@ fun DetalleTransaccionDialog(
     onEdit: () -> Unit
 ) {
     val isTransfer = transaccion.categoria == "Transferencia"
+
+    // --- LÓGICA DE ICONO ACTUALIZADA ---
     val (icono, color) = if (isTransfer && cuenta != null) {
         val c = try { Color(android.graphics.Color.parseColor(cuenta.colorHex)) } catch(e:Exception){ MaterialTheme.colorScheme.primary }
         Pair(IconoUtils.getIconoByName(cuenta.icono), c)
     } else {
-        Pair(CategoriaUtils.getIcono(transaccion.categoria), CategoriaUtils.getColor(transaccion.categoria))
+        // Intenta obtener color de servicio, si no, usa el de categoría
+        val serviceColor = ServiceColorUtils.getColorByName(transaccion.categoria)
+        val finalColor = if (serviceColor != Color(0xFF00E676)) serviceColor else CategoriaUtils.getColor(transaccion.categoria)
+
+        Pair(IconoUtils.getIconoByName(transaccion.categoria), finalColor)
     }
 
     AlertDialog(
@@ -473,8 +430,16 @@ fun ItemTransaccionModerno(
     onItemClick: () -> Unit = {}
 ) {
     var mostrarMenu by remember { mutableStateOf(false) }
-    val icono = CategoriaUtils.getIcono(transaccion.categoria)
-    val colorIcono = CategoriaUtils.getColor(transaccion.categoria)
+
+    // --- LÓGICA DE ICONO ACTUALIZADA ---
+    // Usamos IconoUtils.getIconoByName para soportar "Netflix", "Spotify", etc.
+    val icono = IconoUtils.getIconoByName(transaccion.categoria)
+
+    // Para el color, intentamos ver si es un servicio conocido
+    val serviceColor = ServiceColorUtils.getColorByName(transaccion.categoria)
+    // Si ServiceColor devuelve el default (Verde), probamos con CategoriaUtils (para gastos normales)
+    val colorIcono = if (serviceColor != Color(0xFF00E676)) serviceColor else CategoriaUtils.getColor(transaccion.categoria)
+
     val signo = if (transaccion.esIngreso) "+" else "-"
     val colorMonto = if (transaccion.esIngreso) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
 
@@ -586,7 +551,101 @@ fun CardProgresoAhorro(nombre: String, ahorrado: Double, meta: Double, iconoNomb
         }
     }
 }
+@OptIn(ExperimentalFoundationApi::class)
 
+@Composable
+
+fun ItemTransferencia(
+
+    transaccion: TransaccionEntity,
+
+    cuentaOrigen: CuentaEntity?,
+
+    onItemClick: () -> Unit,
+
+    onEdit: () -> Unit,
+
+    onDelete: () -> Unit
+
+) {
+
+    val nombreDestino = transaccion.notaCompleta.replace("Transferencia a ", "")
+
+    var mostrarMenu by remember { mutableStateOf(false) }
+
+
+
+    val colorCuenta = try {
+
+        Color(android.graphics.Color.parseColor(cuentaOrigen?.colorHex ?: "#00E676"))
+
+    } catch (e: Exception) { MaterialTheme.colorScheme.primary }
+
+
+
+    val iconoCuenta = if(cuentaOrigen != null) IconoUtils.getIconoByName(cuentaOrigen.icono) else Icons.Default.SwapHoriz
+
+
+
+    val textColor = MaterialTheme.colorScheme.onBackground
+
+    val iconBgColor = colorCuenta.copy(alpha = 0.2f)
+
+    val arrowColor = MaterialTheme.colorScheme.outline
+
+    val montoColor = Color(0xFF2979FF)
+
+    val subTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+
+
+
+    Box(modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onItemClick, onLongClick = { mostrarMenu = true }).padding(vertical = 8.dp)) {
+
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+
+            Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(iconBgColor), contentAlignment = Alignment.Center) {
+
+                Icon(imageVector = iconoCuenta, contentDescription = null, tint = colorCuenta)
+
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+
+                    Text(text = cuentaOrigen?.nombre ?: "Origen", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = textColor)
+
+                    PaddingValues(horizontal = 4.dp)
+
+                    Icon(imageVector = Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(14.dp), tint = arrowColor)
+
+                    PaddingValues(horizontal = 4.dp)
+
+                    Text(text = nombreDestino, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = textColor)
+
+                }
+
+                Text(text = "Transferencia", style = MaterialTheme.typography.bodySmall, color = subTextColor)
+
+            }
+
+            Text(text = "-${CurrencyUtils.formatCurrency(transaccion.monto)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = montoColor)
+
+        }
+
+        DropdownMenu(expanded = mostrarMenu, onDismissRequest = { mostrarMenu = false }) {
+
+            DropdownMenuItem(text = { Text("Editar") }, onClick = { mostrarMenu = false; onEdit() }, leadingIcon = { Icon(Icons.Default.Edit, null) })
+
+            DropdownMenuItem(text = { Text("Eliminar") }, onClick = { mostrarMenu = false; onDelete() }, leadingIcon = { Icon(Icons.Default.Delete, null) })
+
+        }
+
+    }
+
+}
 @Composable
 fun DialogoEditarSaldo(saldoActual: Double, onDismiss: () -> Unit, onConfirm: (Double) -> Unit) {
     var texto by remember { mutableStateOf(saldoActual.toString()) }
