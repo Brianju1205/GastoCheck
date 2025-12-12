@@ -24,9 +24,15 @@ interface CuentaDao {
     @Query("SELECT * FROM cuentas WHERE id = :id")
     fun getCuentaByIdFlow(id: Int): Flow<CuentaEntity?>
 
+    // En com.example.gastocheck.data.database.dao.CuentaDao
+
+    @Query("SELECT SUM(saldoInicial) FROM cuentas")
+    suspend fun obtenerSaldoTotalGlobal(): Double?
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCuenta(cuenta: CuentaEntity)
 
+    @Query("SELECT COALESCE(SUM(saldoInicial), 0.0) FROM cuentas")
+    suspend fun obtenerSumaSaldosIniciales(): Double?
     @Update
     suspend fun updateCuenta(cuenta: CuentaEntity)
 

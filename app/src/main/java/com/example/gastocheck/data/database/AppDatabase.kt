@@ -33,7 +33,7 @@ import com.example.gastocheck.data.database.entity.VozPendienteEntity
         SuscripcionEntity::class,
         HistorialPagoEntity::class
     ],
-    version = 15, // <--- Versión actualizada
+    version = 16, // <--- Versión actualizada
     exportSchema = false
 )
 @TypeConverters(Converters::class)

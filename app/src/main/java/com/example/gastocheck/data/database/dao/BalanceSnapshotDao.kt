@@ -12,11 +12,14 @@ interface BalanceSnapshotDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSnapshot(snapshot: BalanceSnapshotEntity)
 
-    // Obtenemos los últimos 10 o 20 saldos para no saturar la UI
+    // Para la gráfica (Flow)
     @Query("SELECT * FROM balance_snapshots WHERE cuentaId = :cuentaId ORDER BY fecha DESC LIMIT 15")
     fun getHistorialSaldos(cuentaId: Int): Flow<List<BalanceSnapshotEntity>>
 
-    // Para borrar historial si se borra una cuenta
+    // --- ESTA ES LA QUE FALTABA Y CAUSA EL ERROR ---
+    @Query("SELECT * FROM balance_snapshots WHERE cuentaId = -1 ORDER BY fecha ASC")
+    suspend fun getHistorialSaldosList(): List<BalanceSnapshotEntity>
+
     @Query("DELETE FROM balance_snapshots WHERE cuentaId = :cuentaId")
     suspend fun deleteSnapshotsByCuenta(cuentaId: Int)
 }

@@ -1,5 +1,7 @@
 package com.example.gastocheck.ui.theme.screens.estadisticas
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -14,12 +16,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.gastocheck.ui.theme.screens.saldo.SaldoScreen
+import com.example.gastocheck.ui.theme.screens.saldo.SaldoViewModel
 import kotlinx.coroutines.launch
 
+@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun EstadisticasScreen() {
-    // Definimos las 6 pestañas solicitadas
+    // Definimos las pestañas
     val tabs = listOf("Saldo", "Cuentas", "Fondos", "Ahorro", "Comparación", "Suscripciones")
     val pagerState = rememberPagerState(pageCount = { tabs.size })
     val coroutineScope = rememberCoroutineScope()
@@ -44,7 +50,6 @@ fun EstadisticasScreen() {
                     }
                 )
 
-                // Usamos ScrollableTabRow porque son 6 pestañas y no caben fijas
                 ScrollableTabRow(
                     selectedTabIndex = pagerState.currentPage,
                     containerColor = MaterialTheme.colorScheme.background,
@@ -80,31 +85,50 @@ fun EstadisticasScreen() {
                 .fillMaxSize(),
             verticalAlignment = Alignment.Top
         ) { page ->
-            // Contenido vacío por ahora para cada pestaña
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.Default.BarChart,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "Sección: ${tabs[page]}",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "Próximamente",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.outline
+            when (page) {
+                0 -> {
+                    // --- AQUÍ CONECTAMOS LA PANTALLA DE SALDO ---
+                    val viewModel: SaldoViewModel = hiltViewModel()
+                    val state by viewModel.uiState.collectAsState()
+
+                    SaldoScreen(
+                        state = state,
+                        onPeriodoSelected = viewModel::onPeriodoChanged
                     )
                 }
+                else -> {
+                    // Pestañas vacías (Placeholder)
+                    PlaceholderTab(title = tabs[page])
+                }
             }
+        }
+    }
+}
+
+@Composable
+fun PlaceholderTab(title: String) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                imageVector = Icons.Default.BarChart,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.surfaceVariant
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Sección: $title",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "Próximamente",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.outline
+            )
         }
     }
 }
