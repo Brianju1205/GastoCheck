@@ -62,7 +62,8 @@ fun HomeScreen(
     onNavegarMetas: () -> Unit,
     onNavegarHistorial: (Int) -> Unit,
     onVozDetectada: (Boolean) -> Unit,
-    onNavegarTransferencia: (Int, String?) -> Unit
+    onNavegarTransferencia: (Int, String?) -> Unit,
+    onNavegarAjustes: () -> Unit
 ) {
     val saldoTotal by viewModel.saldoTotal.collectAsState()
     val historial by viewModel.historialSaldos.collectAsState()
@@ -189,7 +190,16 @@ fun HomeScreen(
                         containerColor = MaterialTheme.colorScheme.background,
                         titleContentColor = MaterialTheme.colorScheme.onBackground
                     ),
-                    navigationIcon = { Icon(Icons.Default.AccountBalanceWallet, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 16.dp)) }
+                    navigationIcon = { Icon(Icons.Default.AccountBalanceWallet, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 16.dp)) },
+                    actions = {
+                        IconButton(onClick = onNavegarAjustes) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Ajustes",
+                                tint = MaterialTheme.colorScheme.onBackground // O primary si prefieres color
+                            )
+                        }
+                    }
                 )
                 ScrollableTabRow(
                     selectedTabIndex = pagerState.currentPage,

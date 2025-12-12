@@ -14,14 +14,15 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
 
-// Importaciones de tus pantallas
 import com.example.gastocheck.ui.theme.screens.agregar.AgregarScreen
 import com.example.gastocheck.ui.theme.screens.agregar.AgregarViewModel
 import com.example.gastocheck.ui.theme.screens.cuentas.*
 import com.example.gastocheck.ui.theme.screens.historial.HistorialScreen
 import com.example.gastocheck.ui.theme.screens.home.HomeScreen
 import com.example.gastocheck.ui.theme.screens.metas.MetasScreen
-import com.example.gastocheck.ui.theme.screens.suscripciones.SuscripcionesScreen // <--- IMPORTANTE
+import com.example.gastocheck.ui.theme.screens.suscripciones.SuscripcionesScreen
+import com.example.gastocheck.ui.theme.screens.ajustes.AjustesScreen
+import com.example.gastocheck.ui.theme.screens.estadisticas.EstadisticasScreen // <--- IMPORTANTE
 import com.example.gastocheck.ui.theme.screens.transferencia.RegistrarTransferenciaScreen
 
 @Composable
@@ -30,11 +31,10 @@ fun AppNavigation() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // --- INSTANCIA COMPARTIDA DEL VIEWMODEL ---
     val sharedAgregarViewModel: AgregarViewModel = hiltViewModel()
 
-    // AGREGAMOS "suscripciones" A LA LISTA DE RUTAS CON BARRA
-    val rutasConBarra = listOf("home", "cuentas_lista", "metas", "suscripciones")
+    // AGREGAMOS "estadisticas" A LA LISTA DE RUTAS CON BARRA
+    val rutasConBarra = listOf("home", "cuentas_lista", "metas", "suscripciones", "estadisticas")
     val showBars = currentRoute in rutasConBarra
 
     Scaffold(
@@ -80,13 +80,26 @@ fun AppNavigation() {
                             }
                         }
                     )
-                    // 4. SUSCRIPCIONES (NUEVO)
+                    // 4. SUSCRIPCIONES
                     NavigationBarItem(
-                        icon = { Icon(Icons.Default.EventRepeat, null) }, // Icono de repetición/calendario
-                        label = { Text("Suscr.") }, // Texto corto
+                        icon = { Icon(Icons.Default.EventRepeat, null) },
+                        label = { Text("Suscr.") },
                         selected = currentRoute == "suscripciones",
                         onClick = {
                             navController.navigate("suscripciones") {
+                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    )
+                    // 5. ESTADÍSTICAS (ABREVIADO A "Stats")
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.InsertChart, null) },
+                        label = { Text("Stats") }, // <--- CAMBIO AQUÍ
+                        selected = currentRoute == "estadisticas",
+                        onClick = {
+                            navController.navigate("estadisticas") {
                                 popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                                 launchSingleTop = true
                                 restoreState = true
@@ -108,32 +121,28 @@ fun AppNavigation() {
                 Box(modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding())) {
                     HomeScreen(
                         agregarViewModel = sharedAgregarViewModel,
-                        onNavegarAgregar = { esIngreso ->
-                            navController.navigate("agregar?id=-1&esIngreso=$esIngreso&vieneDeVoz=false")
-                        },
-                        onNavegarEditar = { id ->
-                            navController.navigate("agregar?id=$id&vieneDeVoz=false")
-                        },
+                        onNavegarAjustes = { navController.navigate("ajustes") },
+                        onNavegarAgregar = { esIngreso -> navController.navigate("agregar?id=-1&esIngreso=$esIngreso&vieneDeVoz=false") },
+                        onNavegarEditar = { id -> navController.navigate("agregar?id=$id&vieneDeVoz=false") },
                         onNavegarMetas = { navController.navigate("metas") },
-                        onNavegarHistorial = { accountId ->
-                            navController.navigate("historial/$accountId")
-                        },
-                        onVozDetectada = { esIngresoDetectado ->
-                            navController.navigate("agregar?id=-1&esIngreso=$esIngresoDetectado&vieneDeVoz=true")
-                        },
+                        onNavegarHistorial = { accountId -> navController.navigate("historial/$accountId") },
+                        onVozDetectada = { esIngresoDetectado -> navController.navigate("agregar?id=-1&esIngreso=$esIngresoDetectado&vieneDeVoz=true") },
                         onNavegarTransferencia = { id, textoVoz ->
-                            val ruta = if (textoVoz != null) {
-                                "registrar_transferencia?id=$id&textoAudio=$textoVoz"
-                            } else {
-                                "registrar_transferencia?id=$id"
-                            }
+                            val ruta = if (textoVoz != null) "registrar_transferencia?id=$id&textoAudio=$textoVoz" else "registrar_transferencia?id=$id"
                             navController.navigate(ruta)
                         }
                     )
                 }
             }
 
-            // --- SUSCRIPCIONES (NUEVO) ---
+            // --- ESTADISTICAS (NUEVA PANTALLA) ---
+            composable("estadisticas") {
+                Box(modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding())) {
+                    EstadisticasScreen()
+                }
+            }
+
+            // --- SUSCRIPCIONES ---
             composable("suscripciones") {
                 Box(modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding())) {
                     SuscripcionesScreen()
@@ -157,107 +166,44 @@ fun AppNavigation() {
                 }
             }
 
+            // --- AJUSTES ---
+            composable("ajustes") {
+                AjustesScreen(onBack = { navController.popBackStack() })
+            }
+
             // --- PANTALLAS SECUNDARIAS ---
 
-            composable(
-                "crear_cuenta?id={id}",
-                arguments = listOf(navArgument("id") { type = NavType.IntType; defaultValue = -1 })
-            ) { backStackEntry ->
-                val id = backStackEntry.arguments?.getInt("id") ?: -1
-                CrearCuentaScreen(
-                    idCuenta = id,
-                    onBack = { navController.popBackStack() }
-                )
+            composable("crear_cuenta?id={id}", arguments = listOf(navArgument("id") { type = NavType.IntType; defaultValue = -1 })) {
+                val id = it.arguments?.getInt("id") ?: -1
+                CrearCuentaScreen(idCuenta = id, onBack = { navController.popBackStack() })
             }
 
-            composable(
-                "detalle_cuenta/{accountId}",
-                arguments = listOf(navArgument("accountId") { type = NavType.IntType })
-            ) { backStackEntry ->
+            composable("detalle_cuenta/{accountId}", arguments = listOf(navArgument("accountId") { type = NavType.IntType })) { backStackEntry ->
                 val accountId = backStackEntry.arguments?.getInt("accountId") ?: -1
-
-                DetalleCuentaScreen(
-                    accountId = accountId,
-                    onBack = { navController.popBackStack() },
-                    onVerTodos = {
-                        navController.navigate("movimientos_cuenta/$accountId")
-                    },
-                    onEditar = { id ->
-                        navController.navigate("crear_cuenta?id=$id")
-                    },
-                    onEditarTransaccion = { id, tipo ->
-                        if (tipo == "TRANSFERENCIA") {
-                            navController.navigate("registrar_transferencia?id=$id")
-                        } else {
-                            navController.navigate("agregar?id=$id&vieneDeVoz=false")
-                        }
-                    }
-                )
+                DetalleCuentaScreen(accountId = accountId, onBack = { navController.popBackStack() }, onVerTodos = { navController.navigate("movimientos_cuenta/$accountId") }, onEditar = { id -> navController.navigate("crear_cuenta?id=$id") }, onEditarTransaccion = { id, tipo -> if (tipo == "TRANSFERENCIA") navController.navigate("registrar_transferencia?id=$id") else navController.navigate("agregar?id=$id&vieneDeVoz=false") })
             }
 
-            composable(
-                "movimientos_cuenta/{accountId}",
-                arguments = listOf(navArgument("accountId") { type = NavType.IntType })
-            ) { backStackEntry ->
+            composable("movimientos_cuenta/{accountId}", arguments = listOf(navArgument("accountId") { type = NavType.IntType })) { backStackEntry ->
                 val accountId = backStackEntry.arguments?.getInt("accountId") ?: -1
-
-                MovimientosCuentaScreen(
-                    accountId = accountId,
-                    onBack = { navController.popBackStack() },
-                    onEditarTransaccion = { id, tipo ->
-                        if (tipo == "TRANSFERENCIA") {
-                            navController.navigate("registrar_transferencia?id=$id")
-                        } else {
-                            navController.navigate("agregar?id=$id&vieneDeVoz=false")
-                        }
-                    }
-                )
+                MovimientosCuentaScreen(accountId = accountId, onBack = { navController.popBackStack() }, onEditarTransaccion = { id, tipo -> if (tipo == "TRANSFERENCIA") navController.navigate("registrar_transferencia?id=$id") else navController.navigate("agregar?id=$id&vieneDeVoz=false") })
             }
 
-            composable(
-                route = "registrar_transferencia?id={id}&textoAudio={textoAudio}",
-                arguments = listOf(
-                    navArgument("id") { type = NavType.IntType; defaultValue = -1 },
-                    navArgument("textoAudio") { type = NavType.StringType; nullable = true; defaultValue = null }
-                )
-            ) { backStackEntry ->
+            composable("registrar_transferencia?id={id}&textoAudio={textoAudio}", arguments = listOf(navArgument("id") { type = NavType.IntType; defaultValue = -1 }, navArgument("textoAudio") { type = NavType.StringType; nullable = true; defaultValue = null })) { backStackEntry ->
                 val id = backStackEntry.arguments?.getInt("id") ?: -1
                 val textoAudio = backStackEntry.arguments?.getString("textoAudio")
-
-                RegistrarTransferenciaScreen(
-                    idTransaccion = id,
-                    textoInicial = textoAudio,
-                    onBack = { navController.popBackStack() }
-                )
+                RegistrarTransferenciaScreen(idTransaccion = id, textoInicial = textoAudio, onBack = { navController.popBackStack() })
             }
 
-            composable(
-                "historial/{accountId}",
-                arguments = listOf(navArgument("accountId") { type = NavType.IntType })
-            ) {
+            composable("historial/{accountId}", arguments = listOf(navArgument("accountId") { type = NavType.IntType })) {
                 HistorialScreen(onBack = { navController.popBackStack() })
             }
 
-            composable(
-                route = "agregar?id={id}&esIngreso={esIngreso}&vieneDeVoz={vieneDeVoz}",
-                arguments = listOf(
-                    navArgument("id") { type = NavType.IntType; defaultValue = -1 },
-                    navArgument("esIngreso") { type = NavType.BoolType; defaultValue = false },
-                    navArgument("vieneDeVoz") { type = NavType.BoolType; defaultValue = false }
-                )
-            ) { backStackEntry ->
+            composable("agregar?id={id}&esIngreso={esIngreso}&vieneDeVoz={vieneDeVoz}", arguments = listOf(navArgument("id") { type = NavType.IntType; defaultValue = -1 }, navArgument("esIngreso") { type = NavType.BoolType; defaultValue = false }, navArgument("vieneDeVoz") { type = NavType.BoolType; defaultValue = false })) { backStackEntry ->
                 val id = backStackEntry.arguments?.getInt("id") ?: -1
                 val esIngreso = backStackEntry.arguments?.getBoolean("esIngreso") ?: false
                 val vieneDeVoz = backStackEntry.arguments?.getBoolean("vieneDeVoz") ?: false
-
-                LaunchedEffect(Unit) {
-                    sharedAgregarViewModel.inicializar(id, esIngreso, vieneDeVoz)
-                }
-
-                AgregarScreen(
-                    viewModel = sharedAgregarViewModel,
-                    alRegresar = { navController.popBackStack() }
-                )
+                LaunchedEffect(Unit) { sharedAgregarViewModel.inicializar(id, esIngreso, vieneDeVoz) }
+                AgregarScreen(viewModel = sharedAgregarViewModel, alRegresar = { navController.popBackStack() })
             }
         }
     }

@@ -28,15 +28,17 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+// Importa tu utilidad de iconos
+import com.example.gastocheck.ui.theme.util.IconoUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CrearCuentaScreen(
-    idCuenta: Int = -1, // Parámetro para saber si es edición
+    idCuenta: Int = -1,
     onBack: () -> Unit,
     viewModel: CrearCuentaViewModel = hiltViewModel()
 ) {
-    // Cargar datos al entrar
+    // Cargar datos una sola vez al entrar
     LaunchedEffect(idCuenta) {
         viewModel.inicializar(idCuenta)
     }
@@ -47,7 +49,6 @@ fun CrearCuentaScreen(
     val colorSeleccionado by viewModel.colorSeleccionado.collectAsState()
     val iconoSeleccionado by viewModel.iconoSeleccionado.collectAsState()
 
-    // Colores del tema
     val background = MaterialTheme.colorScheme.background
     val surface = MaterialTheme.colorScheme.surfaceVariant
     val onSurface = MaterialTheme.colorScheme.onSurface
@@ -84,9 +85,55 @@ fun CrearCuentaScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
+
+            // --- VISTA PREVIA (Tarjeta) ---
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(160.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = try { Color(android.graphics.Color.parseColor(colorSeleccionado)) } catch (e: Exception) { primary }
+                )
+            ) {
+                Box(modifier = Modifier.fillMaxSize().padding(24.dp)) {
+                    Text(
+                        text = tipoSeleccionado.uppercase(),
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.align(Alignment.TopStart)
+                    )
+
+                    // Icono seleccionado en la vista previa
+                    Icon(
+                        imageVector = IconoUtils.getIconoByName(iconoSeleccionado),
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.3f),
+                        modifier = Modifier.align(Alignment.TopEnd).size(48.dp)
+                    )
+
+                    Column(modifier = Modifier.align(Alignment.BottomStart)) {
+                        Text(
+                            text = if (nombre.isEmpty()) "Nombre" else nombre,
+                            color = Color.White,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "$ ${if (saldo.isEmpty()) "0.00" else saldo}",
+                            color = Color.White,
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
             // 1. NOMBRE
             Column {
-                Text("Nombre de la cuenta", color = onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text("Nombre", color = onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = nombre,
@@ -104,37 +151,9 @@ fun CrearCuentaScreen(
                 )
             }
 
-            // 2. TIPO
+            // 2. SALDO
             Column {
-                Text("Tipo de cuenta", color = onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(8.dp))
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    OutlinedTextField(
-                        value = tipoSeleccionado,
-                        onValueChange = {},
-                        readOnly = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        trailingIcon = { Icon(Icons.Default.ArrowDropDown, null, tint = onSurface) },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = surface,
-                            unfocusedContainerColor = surface,
-                            focusedBorderColor = primary,
-                            unfocusedBorderColor = Color.Transparent
-                        )
-                    )
-                    Box(modifier = Modifier.matchParentSize().clickable { expandedTipo = true })
-                    DropdownMenu(expanded = expandedTipo, onDismissRequest = { expandedTipo = false }) {
-                        viewModel.listaTipos.forEach { tipo ->
-                            DropdownMenuItem(text = { Text(tipo) }, onClick = { viewModel.onTipoChange(tipo); expandedTipo = false })
-                        }
-                    }
-                }
-            }
-
-            // 3. SALDO
-            Column {
-                Text("Saldo inicial", color = onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text("Saldo Actual", color = onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = saldo,
@@ -153,6 +172,34 @@ fun CrearCuentaScreen(
                 )
             }
 
+            // 3. TIPO
+            Column {
+                Text("Tipo", color = onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = tipoSeleccionado,
+                        onValueChange = {},
+                        readOnly = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        trailingIcon = { Icon(Icons.Default.ArrowDropDown, null, tint = onSurface) },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = surface,
+                            unfocusedContainerColor = surface,
+                            focusedBorderColor = primary,
+                            unfocusedBorderColor = Color.Transparent
+                        )
+                    )
+                    Box(modifier = Modifier.matchParentSize().clickable { expandedTipo = true })
+                    DropdownMenu(expanded = expandedTipo, onDismissRequest = { expandedTipo = false }, modifier = Modifier.background(surface)) {
+                        viewModel.listaTipos.forEach { tipo ->
+                            DropdownMenuItem(text = { Text(tipo, color = onSurface) }, onClick = { viewModel.onTipoChange(tipo); expandedTipo = false })
+                        }
+                    }
+                }
+            }
+
             // 4. COLOR
             Column {
                 Text("Color", color = onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold)
@@ -167,8 +214,11 @@ fun CrearCuentaScreen(
                                 .clip(CircleShape)
                                 .background(color)
                                 .border(width = if (isSelected) 3.dp else 0.dp, color = onSurface, shape = CircleShape)
-                                .clickable { viewModel.onColorChange(colorHex) }
-                        )
+                                .clickable { viewModel.onColorChange(colorHex) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isSelected) Icon(Icons.Default.Check, null, tint = Color.White)
+                        }
                     }
                 }
             }
@@ -177,27 +227,35 @@ fun CrearCuentaScreen(
             Column {
                 Text("Icono", color = onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(12.dp))
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(5),
-                    modifier = Modifier.height(140.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(viewModel.listaIconos) { iconName ->
-                        val isSelected = iconoSeleccionado == iconName
-                        val iconVector = getIconByName(iconName)
-                        val primaryColor = try { Color(android.graphics.Color.parseColor(colorSeleccionado)) } catch(e:Exception){ primary }
 
-                        Box(
-                            modifier = Modifier
-                                .aspectRatio(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(surface)
-                                .border(width = if (isSelected) 2.dp else 0.dp, color = if (isSelected) primaryColor else Color.Transparent, shape = RoundedCornerShape(12.dp))
-                                .clickable { viewModel.onIconoChange(iconName) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(imageVector = iconVector, contentDescription = null, tint = if (isSelected) primaryColor else outline)
+                // Usamos Box con altura fija para que el Grid scrollee dentro del Column principal si es necesario
+                // o simplemente ocupe espacio fijo
+                Box(modifier = Modifier.height(200.dp)) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(5),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(viewModel.listaIconos) { iconName ->
+                            val isSelected = iconoSeleccionado == iconName
+                            val iconVector = IconoUtils.getIconoByName(iconName)
+                            val primaryColor = try { Color(android.graphics.Color.parseColor(colorSeleccionado)) } catch(e:Exception){ primary }
+
+                            Box(
+                                modifier = Modifier
+                                    .aspectRatio(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(surface)
+                                    .border(width = if (isSelected) 2.dp else 0.dp, color = if (isSelected) primaryColor else Color.Transparent, shape = RoundedCornerShape(12.dp))
+                                    .clickable { viewModel.onIconoChange(iconName) },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = iconVector,
+                                    contentDescription = null,
+                                    tint = if (isSelected) primaryColor else outline
+                                )
+                            }
                         }
                     }
                 }
@@ -215,22 +273,5 @@ fun CrearCuentaScreen(
                 Text(if(idCuenta == -1) "Guardar Cuenta" else "Guardar Cambios", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
         }
-    }
-}
-
-// Función auxiliar para iconos (asegúrate de que esté en este archivo o en IconoUtils)
-fun getIconByName(name: String): ImageVector {
-    return when(name) {
-        "Wallet" -> Icons.Default.Wallet
-        "CreditCard" -> Icons.Default.CreditCard
-        "Savings" -> Icons.Default.Savings
-        "AttachMoney" -> Icons.Default.AttachMoney
-        "AccountBalance" -> Icons.Default.AccountBalance
-        "ShoppingCart" -> Icons.Default.ShoppingCart
-        "Work" -> Icons.Default.Work
-        "TrendingUp" -> Icons.Default.TrendingUp
-        "Home" -> Icons.Default.Home
-        "School" -> Icons.Default.School
-        else -> Icons.Default.Wallet
     }
 }
