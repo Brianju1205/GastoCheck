@@ -210,7 +210,7 @@ interface GroqApi {
 class GeminiRepository @Inject constructor() { // Mantenemos el nombre para no romper tu inyección de dependencias
 
     // TU CLAVE DE GROQ (Ya configurada)
-    private val apiKey = "Bearer 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"
+    private val apiKey = ""
 
     // URL BASE DE GROQ (Compatible con OpenAI)
     private val baseUrl = "https://api.groq.com/openai/v1/"
