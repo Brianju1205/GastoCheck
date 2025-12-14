@@ -178,7 +178,6 @@ fun SuscripcionesScreen(viewModel: SuscripcionesViewModel = hiltViewModel()) {
 }
 
 // ... COMPONENTES UI (FiltroChip, CardAlertaProxima, ItemSuscripcion, DetalleDialog, HistorialDialog, PantallaCrearEditar) ...
-// (Todo este código sigue siendo el mismo que en las versiones anteriores, asegurando que uses IconoUtils y ServiceColorUtils)
 
 @Composable
 fun FiltroChip(texto: String, seleccionado: Boolean, onClick: () -> Unit) {
@@ -319,9 +318,6 @@ fun HistorialPagosDialog(sub: SuscripcionEntity, viewModel: SuscripcionesViewMod
     }
 }
 
-// ... SelectableStatusButton, PantallaCrearEditarSuscripcion, CampoTextoSuscripcion ...
-// (El resto del código es el mismo, pero lo pego aquí para completar)
-
 @Composable
 fun SelectableStatusButton(selected: Boolean, color: Color, icon: ImageVector, onClick: () -> Unit) {
     Box(modifier = Modifier.size(50.dp).clip(CircleShape).background(if (selected) color else MaterialTheme.colorScheme.surfaceContainerHighest).clickable(onClick = onClick), contentAlignment = Alignment.Center) { Icon(icon, null, tint = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -351,7 +347,12 @@ fun PantallaCrearEditarSuscripcion(existente: SuscripcionEntity?, cuentas: List<
     var menuFrecuencia by remember { mutableStateOf(false) }
     val frecuencias = listOf("Semanal", "Quincenal", "Mensual", "Anual")
 
-    Scaffold(containerColor = MaterialTheme.colorScheme.background, topBar = { CenterAlignedTopAppBar(title = { Text(if (existente == null) "Agregar Suscripción" else "Editar", fontWeight = FontWeight.Bold) }, navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) } }, colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = MaterialTheme.colorScheme.background)) }) { padding ->
+    // --- SOLUCIÓN: imePadding() para que el teclado no tape el contenido ---
+    Scaffold(
+        modifier = Modifier.imePadding(),
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = { CenterAlignedTopAppBar(title = { Text(if (existente == null) "Agregar Suscripción" else "Editar", fontWeight = FontWeight.Bold) }, navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) } }, colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = MaterialTheme.colorScheme.background)) }
+    ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 24.dp).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
             Text("Elige un servicio", modifier = Modifier.align(Alignment.Start), fontWeight = FontWeight.Bold, fontSize = 20.sp); Spacer(Modifier.height(16.dp))
             iconos.chunked(4).forEach { fila ->
@@ -387,7 +388,17 @@ fun PantallaCrearEditarSuscripcion(existente: SuscripcionEntity?, cuentas: List<
             Text("Recordatorios", modifier = Modifier.align(Alignment.Start).padding(bottom = 8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("1 día antes", "3 días antes", "7 días antes").forEach { r -> FiltroChip(texto = r, seleccionado = recordatorio == r) { recordatorio = r } } }
             Spacer(Modifier.height(16.dp))
-            Text("Notas", modifier = Modifier.align(Alignment.Start).padding(bottom = 8.dp)); CampoTextoSuscripcion(nota, { nota = it }, "Añade notas adicionales aquí...", singleLine = false, modifier = Modifier.height(100.dp))
+
+            // --- CAMPO NOTAS MEJORADO (Más alto y multilínea) ---
+            Text("Notas", modifier = Modifier.align(Alignment.Start).padding(bottom = 8.dp))
+            CampoTextoSuscripcion(
+                value = nota,
+                onValueChange = { nota = it },
+                placeholder = "Añade notas adicionales aquí...",
+                singleLine = false,
+                modifier = Modifier.height(100.dp) // Altura suficiente
+            )
+
             Spacer(Modifier.height(32.dp))
             Button(onClick = { val m = monto.toDoubleOrNull(); if (nombre.isNotEmpty() && m != null) onConfirm(nombre, m, fecha, frecuencia, icono, cuentaId, nota, recordatorio, horaRecordatorio) }, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(12.dp)) { Text("Guardar", fontWeight = FontWeight.Bold) }
             Spacer(Modifier.height(32.dp))

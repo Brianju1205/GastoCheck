@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -295,7 +296,13 @@ fun HomeScreen(
                                     onDelete = { transaccionSeleccionada = t; mostrarConfirmacionBorrar = true }
                                 )
                             } else {
-                                ItemTransaccionModerno(transaccion = t, nombreCuenta, onEdit = { onNavegarEditar(t.id) }, onDelete = { transaccionSeleccionada = t; mostrarConfirmacionBorrar = true }, onItemClick = { transaccionSeleccionada = t; mostrarDetalle = true })
+                                ItemTransaccionModerno(
+                                    transaccion = t,
+                                    cuentaOrigen = cuenta,
+                                    onEdit = { onNavegarEditar(t.id) },
+                                    onDelete = { transaccionSeleccionada = t; mostrarConfirmacionBorrar = true },
+                                    onItemClick = { transaccionSeleccionada = t; mostrarDetalle = true }
+                                )
                             }
                         }
 
@@ -369,7 +376,13 @@ fun HomeScreen(
                                         onDelete = { transaccionSeleccionada = t; mostrarConfirmacionBorrar = true }
                                     )
                                 } else {
-                                    ItemTransaccionModerno(transaccion = t, nombreCuenta, onEdit = { onNavegarEditar(t.id) }, onDelete = { transaccionSeleccionada = t; mostrarConfirmacionBorrar = true }, onItemClick = { transaccionSeleccionada = t; mostrarDetalle = true })
+                                    ItemTransaccionModerno(
+                                        transaccion = t,
+                                        cuentaOrigen = cuenta,
+                                        onEdit = { onNavegarEditar(t.id) },
+                                        onDelete = { transaccionSeleccionada = t; mostrarConfirmacionBorrar = true },
+                                        onItemClick = { transaccionSeleccionada = t; mostrarDetalle = true }
+                                    )
                                 }
                             }
                         }
@@ -420,6 +433,7 @@ fun DetalleTransaccionDialog(
                     Text(cuenta?.nombre ?: "Cuenta", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                 }
                 Spacer(Modifier.height(8.dp))
+                // Aquí usamos notaCompleta para ver el detalle de conversión
                 Text(transaccion.notaCompleta.ifEmpty { "Sin nota" })
                 Spacer(Modifier.height(4.dp))
                 Text(DateUtils.formatearFechaAmigable(transaccion.fecha), style = MaterialTheme.typography.bodySmall)
@@ -434,39 +448,94 @@ fun DetalleTransaccionDialog(
 @Composable
 fun ItemTransaccionModerno(
     transaccion: TransaccionEntity,
-    nombreCuenta: String,
+    cuentaOrigen: CuentaEntity?,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onItemClick: () -> Unit = {}
 ) {
     var mostrarMenu by remember { mutableStateOf(false) }
 
-    // --- LÓGICA DE ICONO ACTUALIZADA ---
-    // Usamos IconoUtils.getIconoByName para soportar "Netflix", "Spotify", etc.
+    // Usamos IconoUtils para obtener el icono correcto (ej: Netflix, Uber)
     val icono = IconoUtils.getIconoByName(transaccion.categoria)
-    // Para el color, intentamos ver si es un servicio conocido
+
+    // Colores inteligentes
     val serviceColor = ServiceColorUtils.getColorByName(transaccion.categoria)
-    // Si ServiceColor devuelve el default (Verde), probamos con CategoriaUtils (para gastos normales)
     val colorIcono = if (serviceColor != Color(0xFF00E676)) serviceColor else CategoriaUtils.getColor(transaccion.categoria)
 
     val signo = if (transaccion.esIngreso) "+" else "-"
     val colorMonto = if (transaccion.esIngreso) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
 
+    // CAMBIO CLAVE: Usamos 'notaResumen' como título principal.
+    // Esto mostrará "Tacos" si escribiste nota, o "Comida" si no escribiste nada.
+    // Y oculta los detalles técnicos de conversión (ej: "10 USD...") que se quedan en 'notaCompleta'.
+    val tituloPrincipal = transaccion.notaResumen.ifBlank { transaccion.categoria }
+    val nombreCuenta = cuentaOrigen?.nombre ?: "Efectivo"
+
     Box {
-        Row(modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { onItemClick() }, onLongClick = { mostrarMenu = true }).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
-                Icon(imageVector = icono, contentDescription = null, tint = colorIcono, modifier = Modifier.size(24.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(onClick = { onItemClick() }, onLongClick = { mostrarMenu = true })
+                .padding(vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Icono Circular
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icono,
+                    contentDescription = null,
+                    tint = colorIcono,
+                    modifier = Modifier.size(24.dp)
+                )
             }
+
             Spacer(modifier = Modifier.width(16.dp))
+
+            // Textos Centrales
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = transaccion.categoria, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                Text(text = nombreCuenta, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // Título: Muestra la Nota limpia (o Categoría si no hay nota)
+                Text(
+                    text = tituloPrincipal,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                // Subtítulo: Cuenta + Categoría (si el título ya es la nota, recordamos la categoría aquí opcionalmente)
+                Text(
+                    text = if(tituloPrincipal != transaccion.categoria) "$nombreCuenta • ${transaccion.categoria}" else nombreCuenta,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-            Text(text = "$signo${CurrencyUtils.formatCurrency(transaccion.monto)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = colorMonto)
+
+            // Monto
+            Text(
+                text = "$signo${CurrencyUtils.formatCurrency(transaccion.monto)}",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = colorMonto
+            )
         }
+
+        // Menú de opciones (Editar/Borrar)
         DropdownMenu(expanded = mostrarMenu, onDismissRequest = { mostrarMenu = false }) {
-            DropdownMenuItem(text = { Text("Editar") }, onClick = { mostrarMenu = false; onEdit() }, leadingIcon = { Icon(Icons.Default.Edit, null) })
-            DropdownMenuItem(text = { Text("Eliminar") }, onClick = { mostrarMenu = false; onDelete() }, leadingIcon = { Icon(Icons.Default.Delete, null) })
+            DropdownMenuItem(
+                text = { Text("Editar") },
+                onClick = { mostrarMenu = false; onEdit() },
+                leadingIcon = { Icon(Icons.Default.Edit, null) }
+            )
+            DropdownMenuItem(
+                text = { Text("Eliminar") },
+                onClick = { mostrarMenu = false; onDelete() },
+                leadingIcon = { Icon(Icons.Default.Delete, null) }
+            )
         }
     }
 }
@@ -494,9 +563,9 @@ fun CardProgresoAhorro(nombre: String, ahorrado: Double, meta: Double, iconoNomb
     val progreso = if (meta > 0) (ahorrado / meta).toFloat().coerceIn(0f, 1f) else 0f
     val colorNeon = Color(0xFF00E676)
 
-    // Obtenemos el vector del icono
-    //val iconoVector = getIconoByNameHome(iconoNombre)
+    // CAMBIO IMPORTANTE: Usamos la utilidad centralizada para soportar todos los iconos (carro, casa, etc.)
     val iconoVector = IconoUtils.getIconoByName(iconoNombre)
+
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
         shape = RoundedCornerShape(24.dp),
@@ -561,118 +630,60 @@ fun CardProgresoAhorro(nombre: String, ahorrado: Double, meta: Double, iconoNomb
     }
 }
 @OptIn(ExperimentalFoundationApi::class)
-
 @Composable
-
 fun ItemTransferencia(
-
     transaccion: TransaccionEntity,
-
     cuentaOrigen: CuentaEntity?,
-
     onItemClick: () -> Unit,
-
     onEdit: () -> Unit,
-
     onDelete: () -> Unit
-
 ) {
-
-    val nombreDestino = transaccion.notaCompleta.replace("Transferencia a ", "")
+    // CAMBIO CLAVE: Usamos 'notaResumen' en lugar de 'notaCompleta'
+    // Esto asegura que solo leemos "Transferencia a BBVA" y no la nota del usuario.
+    val nombreDestino = transaccion.notaResumen
+        .replace("Transferencia a ", "")
+        .replace("Recibido de ", "")
 
     var mostrarMenu by remember { mutableStateOf(false) }
 
-
-
     val colorCuenta = try {
-
         Color(android.graphics.Color.parseColor(cuentaOrigen?.colorHex ?: "#00E676"))
-
     } catch (e: Exception) { MaterialTheme.colorScheme.primary }
 
-
-
     val iconoCuenta = if(cuentaOrigen != null) IconoUtils.getIconoByName(cuentaOrigen.icono) else Icons.Default.SwapHoriz
-
-
-
     val textColor = MaterialTheme.colorScheme.onBackground
-
     val iconBgColor = colorCuenta.copy(alpha = 0.2f)
-
     val arrowColor = MaterialTheme.colorScheme.outline
-
     val montoColor = Color(0xFF2979FF)
-
     val subTextColor = MaterialTheme.colorScheme.onSurfaceVariant
 
-
-
     Box(modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onItemClick, onLongClick = { mostrarMenu = true }).padding(vertical = 8.dp)) {
-
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-
             Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(iconBgColor), contentAlignment = Alignment.Center) {
-
                 Icon(imageVector = iconoCuenta, contentDescription = null, tint = colorCuenta)
-
             }
-
             Spacer(modifier = Modifier.width(16.dp))
-
             Column(modifier = Modifier.weight(1f)) {
-
                 Row(verticalAlignment = Alignment.CenterVertically) {
-
                     Text(text = cuentaOrigen?.nombre ?: "Origen", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = textColor)
-
                     PaddingValues(horizontal = 4.dp)
-
                     Icon(imageVector = Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(14.dp), tint = arrowColor)
-
                     PaddingValues(horizontal = 4.dp)
-
+                    // Aquí se mostrará limpio "BBVA"
                     Text(text = nombreDestino, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = textColor)
-
                 }
-
                 Text(text = "Transferencia", style = MaterialTheme.typography.bodySmall, color = subTextColor)
-
             }
-
             Text(text = "-${CurrencyUtils.formatCurrency(transaccion.monto)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = montoColor)
-
         }
-
         DropdownMenu(expanded = mostrarMenu, onDismissRequest = { mostrarMenu = false }) {
-
             DropdownMenuItem(text = { Text("Editar") }, onClick = { mostrarMenu = false; onEdit() }, leadingIcon = { Icon(Icons.Default.Edit, null) })
-
             DropdownMenuItem(text = { Text("Eliminar") }, onClick = { mostrarMenu = false; onDelete() }, leadingIcon = { Icon(Icons.Default.Delete, null) })
-
         }
-
     }
-
 }
 @Composable
 fun DialogoEditarSaldo(saldoActual: Double, onDismiss: () -> Unit, onConfirm: (Double) -> Unit) {
     var texto by remember { mutableStateOf(saldoActual.toString()) }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Ajustar Saldo Base") }, text = { OutlinedTextField(value = texto, onValueChange = { texto = it }, label = { Text("Saldo Inicial ($)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)) }, confirmButton = { Button(onClick = { val n = texto.toDoubleOrNull(); if (n != null) onConfirm(n) }) { Text("Guardar") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } })
-}
-
-// Función Helper Local para Iconos de Metas en el Home
-fun getIconoByNameHome(nombre: String): ImageVector {
-    return when (nombre) {
-        "DirectionsCar" -> Icons.Default.DirectionsCar
-        "TwoWheeler" -> Icons.Default.TwoWheeler
-        "Home" -> Icons.Default.Home
-        "Flight" -> Icons.Default.Flight
-        "Smartphone" -> Icons.Default.Smartphone
-        "Computer" -> Icons.Default.Computer
-        "School" -> Icons.Default.School
-        "Pets" -> Icons.Default.Pets
-        "ShoppingBag" -> Icons.Default.ShoppingBag
-        else -> Icons.Default.Savings
-    }
 }

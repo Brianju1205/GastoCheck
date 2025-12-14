@@ -19,7 +19,7 @@ class TransaccionRepositoryImpl @Inject constructor(
     private val db: AppDatabase
 ) : TransaccionRepository {
 
-    // ... (Otros métodos sin cambios) ...
+    // ... (Métodos de lectura sin cambios) ...
     override fun getTransaccionesGlobales() = transaccionDao.getAllTransacciones()
     override fun getTransaccionesPorCuenta(cuentaId: Int) = transaccionDao.getTransaccionesByCuenta(cuentaId)
     override fun getCuentas() = cuentaDao.getCuentas()
@@ -27,8 +27,13 @@ class TransaccionRepositoryImpl @Inject constructor(
     override fun getHistorialSaldos(cuentaId: Int) = balanceSnapshotDao.getHistorialSaldos(cuentaId)
     override suspend fun getTransaccionById(id: Int) = transaccionDao.getTransaccionById(id)
     override suspend fun getCuentaById(id: Int) = cuentaDao.getCuentaById(id)
-    override suspend fun getTransaccionPareja(transaccion: TransaccionEntity) = transaccionDao.getTransaccionPareja(transaccion.fecha, transaccion.monto, transaccion.id)
+
+    // Asegúrate de que tu DAO tenga este método o usa la lógica de búsqueda manual si no
+    override suspend fun getTransaccionPareja(transaccion: TransaccionEntity) =
+        transaccionDao.getTransaccionPareja(transaccion.fecha, transaccion.monto, transaccion.id)
+
     override suspend fun insertCuenta(cuenta: CuentaEntity) = cuentaDao.insertCuenta(cuenta)
+
     override suspend fun insertTransaccion(transaccion: TransaccionEntity) {
         db.withTransaction {
             transaccionDao.insertTransaccion(transaccion)
@@ -36,6 +41,7 @@ class TransaccionRepositoryImpl @Inject constructor(
             registrarSnapshot(-1, transaccion.fecha, transaccion.categoria)
         }
     }
+
     override suspend fun deleteTransaccion(transaccion: TransaccionEntity) {
         db.withTransaction {
             transaccionDao.deleteTransaccion(transaccion)
@@ -43,26 +49,75 @@ class TransaccionRepositoryImpl @Inject constructor(
             registrarSnapshot(-1, Date(), "Corrección")
         }
     }
+
     override suspend fun eliminarTransferenciaCompleta(id: Int) {
         db.withTransaction {
             val tOriginal = transaccionDao.getTransaccionById(id) ?: return@withTransaction
             val tPareja = transaccionDao.getTransaccionPareja(tOriginal.fecha, tOriginal.monto, tOriginal.id)
+
             transaccionDao.deleteTransaccion(tOriginal)
             if (tPareja != null) transaccionDao.deleteTransaccion(tPareja)
+
             registrarSnapshot(tOriginal.cuentaId, Date(), "Corrección Transferencia")
             if (tPareja != null) registrarSnapshot(tPareja.cuentaId, Date(), "Corrección Transferencia")
             registrarSnapshot(-1, Date(), "Corrección Transferencia")
         }
     }
-    override suspend fun realizarTransferencia(origenId: Int, destinoId: Int, monto: Double, fecha: Date) {
+
+    // --- CORRECCIÓN LÓGICA DE TRANSFERENCIA ---
+    // --- CORRECCIÓN: Resumen Limpio vs Detalle Completo ---
+    override suspend fun realizarTransferencia(
+        origenId: Int,
+        destinoId: Int,
+        monto: Double,
+        notaUsuario: String,
+        detalleTecnico: String?,
+        fecha: Date
+    ) {
         db.withTransaction {
             val cuentaOrigen = cuentaDao.getCuentaById(origenId)
             val cuentaDestino = cuentaDao.getCuentaById(destinoId)
+
             if (cuentaOrigen != null && cuentaDestino != null) {
-                val salida = TransaccionEntity(monto = monto, categoria = "Transferencia", notaCompleta = "Transferencia a ${cuentaDestino.nombre}", notaResumen = "Transferencia Enviada", fecha = fecha, esIngreso = false, cuentaId = origenId)
+
+                // 1. Textos Base (Lo que saldrá en la lista)
+                val baseSalida = "Transferencia a ${cuentaDestino.nombre}"
+                val baseEntrada = "Recibido de ${cuentaOrigen.nombre}"
+
+                // 2. Textos Completos (Lo que saldrá en detalles + conversión)
+                // Si hay nota de usuario, agregamos un punto. Si no, queda limpio.
+                val textoNotaSalida = if (notaUsuario.isNotBlank()) "$baseSalida. $notaUsuario" else baseSalida
+                val textoNotaEntrada = if (notaUsuario.isNotBlank()) "$baseEntrada. $notaUsuario" else baseEntrada
+
+                // Agregamos la conversión técnica al final si existe
+                val notaCompletaSalida = if (detalleTecnico != null) "$textoNotaSalida\n$detalleTecnico" else textoNotaSalida
+                val notaCompletaEntrada = if (detalleTecnico != null) "$textoNotaEntrada\n$detalleTecnico" else textoNotaEntrada
+
+                // 3. Crear Entidades
+                val salida = TransaccionEntity(
+                    monto = monto,
+                    categoria = "Transferencia",
+                    notaCompleta = notaCompletaSalida,   // Tiene TODO (para ver en detalles)
+                    notaResumen = baseSalida,            // LIMPIO (para ver en lista "Home")
+                    fecha = fecha,
+                    esIngreso = false,
+                    cuentaId = origenId
+                )
+
+                val entrada = TransaccionEntity(
+                    monto = monto,
+                    categoria = "Transferencia",
+                    notaCompleta = notaCompletaEntrada,  // Tiene TODO
+                    notaResumen = baseEntrada,           // LIMPIO
+                    fecha = fecha,
+                    esIngreso = true,
+                    cuentaId = destinoId
+                )
+
+                // 4. Guardar
                 transaccionDao.insertTransaccion(salida)
-                val entrada = TransaccionEntity(monto = monto, categoria = "Transferencia", notaCompleta = "Recibido de ${cuentaOrigen.nombre}", notaResumen = "Transferencia Recibida", fecha = fecha, esIngreso = true, cuentaId = destinoId)
                 transaccionDao.insertTransaccion(entrada)
+
                 registrarSnapshot(origenId, fecha, "Transferencia Enviada")
                 registrarSnapshot(destinoId, fecha, "Transferencia Recibida")
                 registrarSnapshot(-1, fecha, "Transferencia")
@@ -70,22 +125,19 @@ class TransaccionRepositoryImpl @Inject constructor(
         }
     }
 
-    // --- NUEVO: Implementación Delete Cuenta ---
     override suspend fun deleteCuenta(cuenta: CuentaEntity) {
         db.withTransaction {
-            // 1. Borrar snapshots asociados
             balanceSnapshotDao.deleteSnapshotsByCuenta(cuenta.id)
-            // 2. Borrar la cuenta (Las transacciones se borran por CASCADE en la BD)
             cuentaDao.deleteCuenta(cuenta)
         }
     }
 
-    // ... (Lógica privada de snapshots igual) ...
     private suspend fun registrarSnapshot(cuentaId: Int, fecha: Date, motivo: String) {
         val saldoCalculado = calcularSaldoActual(cuentaId)
         val snapshot = BalanceSnapshotEntity(cuentaId = cuentaId, saldo = saldoCalculado, fecha = fecha, motivo = motivo)
         balanceSnapshotDao.insertSnapshot(snapshot)
     }
+
     private suspend fun calcularSaldoActual(cuentaId: Int): Double {
         if (cuentaId == -1) {
             val cuentas = cuentaDao.getCuentasList()

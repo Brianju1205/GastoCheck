@@ -54,7 +54,7 @@ fun MetasScreen(viewModel: MetasViewModel = hiltViewModel()) {
     var mostrarDialogoAbonar by remember { mutableStateOf(false) }
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background, // Se adapta al tema
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("Mis Metas", fontWeight = FontWeight.Bold) },
@@ -70,7 +70,7 @@ fun MetasScreen(viewModel: MetasViewModel = hiltViewModel()) {
                     metaParaEditar = null
                     mostrarPantallaCrear = true
                 },
-                containerColor = MaterialTheme.colorScheme.primary, // Usa el color principal del tema
+                containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Nueva Meta")
@@ -90,7 +90,6 @@ fun MetasScreen(viewModel: MetasViewModel = hiltViewModel()) {
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 contentPadding = PaddingValues(bottom = 80.dp)
             ) {
-                // Ordenamos para que la más reciente (por ID) salga primero, si el DAO no lo hace
                 items(metas) { meta ->
                     MetaItemCard(
                         meta = meta,
@@ -174,15 +173,13 @@ fun MetasScreen(viewModel: MetasViewModel = hiltViewModel()) {
 }
 
 // -------------------------------------------------------------------------
-// COMPONENTES UI ADAPTABLES AL TEMA
+// COMPONENTES UI
 // -------------------------------------------------------------------------
 
 @Composable
 fun MetaItemCard(meta: MetaEntity, onClick: () -> Unit, onAbonarClick: () -> Unit) {
     val progreso = if (meta.montoObjetivo > 0) (meta.montoAhorrado / meta.montoObjetivo).toFloat().coerceIn(0f, 1f) else 0f
     val porcentaje = (progreso * 100).toInt()
-
-    // Usamos colores del tema
     val colorPrimario = MaterialTheme.colorScheme.primary
     val colorFondoCard = MaterialTheme.colorScheme.surfaceVariant
 
@@ -221,13 +218,12 @@ fun MetaItemCard(meta: MetaEntity, onClick: () -> Unit, onAbonarClick: () -> Uni
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // BARRA PROGRESO
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(12.dp)
                     .clip(RoundedCornerShape(50))
-                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)) // Fondo grisáceo adaptable
+                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f))
             ) {
                 Box(
                     modifier = Modifier
@@ -270,11 +266,9 @@ fun DetalleMetaOpcionesDialog(
 ) {
     var mostrarConfirmacionBorrar by remember { mutableStateOf(false) }
     var abonoParaEditar by remember { mutableStateOf<AbonoEntity?>(null) }
-
     val colorPrimario = MaterialTheme.colorScheme.primary
     val colorTexto = MaterialTheme.colorScheme.onSurface
 
-    // Cálculo días
     val diasRestantesTexto = remember(meta.fechaLimite) {
         if (meta.fechaLimite != null && meta.fechaLimite > 0) {
             val hoy = System.currentTimeMillis()
@@ -318,7 +312,6 @@ fun DetalleMetaOpcionesDialog(
                 modifier = Modifier.fillMaxWidth().wrapContentHeight()
             ) {
                 Column(modifier = Modifier.padding(24.dp)) {
-                    // HEADER
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(getIconoByName(meta.icono), null, tint = colorPrimario, modifier = Modifier.size(32.dp))
                         Spacer(Modifier.width(12.dp))
@@ -327,13 +320,11 @@ fun DetalleMetaOpcionesDialog(
 
                     Spacer(Modifier.height(16.dp))
 
-                    // RESUMEN
                     Text("Objetivo: ${CurrencyUtils.formatCurrency(meta.montoObjetivo)}", color = colorTexto)
                     Text("Ahorrado: ${CurrencyUtils.formatCurrency(meta.montoAhorrado)}", color = colorPrimario, fontWeight = FontWeight.Bold)
 
                     Spacer(Modifier.height(12.dp))
 
-                    // INFO EXTRA
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         if (diasRestantesTexto != null) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -356,7 +347,6 @@ fun DetalleMetaOpcionesDialog(
                     Divider(color = MaterialTheme.colorScheme.outlineVariant)
                     Spacer(Modifier.height(16.dp))
 
-                    // HISTORIAL (Max 3)
                     Text("Historial (Últimos 3)", color = colorTexto, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(8.dp))
 
@@ -372,7 +362,6 @@ fun DetalleMetaOpcionesDialog(
 
                     Spacer(Modifier.height(24.dp))
 
-                    // BOTONES
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -460,7 +449,6 @@ fun PantallaCrearEditarMeta(
     var nota by remember { mutableStateOf(metaExistente?.nota ?: "") }
 
     val iconosDisponibles = listOf("Savings", "DirectionsCar", "TwoWheeler", "Home", "Flight", "Smartphone", "Computer", "School", "Pets", "ShoppingBag")
-
     val context = LocalContext.current
     val calendar = Calendar.getInstance()
     val datePickerDialog = DatePickerDialog(context, { _: DatePicker, year: Int, month: Int, day: Int ->
@@ -470,13 +458,12 @@ fun PantallaCrearEditarMeta(
     }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH))
 
     var menuCuentasExpanded by remember { mutableStateOf(false) }
-
-    // Colores tema
     val colorFondo = MaterialTheme.colorScheme.background
     val colorSurface = MaterialTheme.colorScheme.surfaceVariant
     val colorPrimario = MaterialTheme.colorScheme.primary
 
     Scaffold(
+        modifier = Modifier.imePadding(), // <--- SOLUCIÓN CLAVE: Ajusta el contenido cuando sale el teclado
         containerColor = colorFondo,
         topBar = {
             CenterAlignedTopAppBar(
@@ -585,6 +572,7 @@ fun PantallaCrearEditarMeta(
             Spacer(modifier = Modifier.height(20.dp))
 
             InputLabel("Notas")
+            // Ahora este campo crece según lo que escribas o tiene un alto fijo razonable
             CampoTextoTematico(value = nota, onValueChange = { nota = it }, placeholder = "Descripción...", singleLine = false, modifier = Modifier.height(80.dp))
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -607,7 +595,6 @@ fun PantallaCrearEditarMeta(
     }
 }
 
-// Reemplazamos "CampoTextoDark" por uno temático
 @Composable
 fun CampoTextoTematico(
     value: String,

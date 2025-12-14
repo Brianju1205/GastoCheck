@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.gastocheck.data.database.entity.CuentaEntity
 import com.example.gastocheck.data.gemini.GeminiRepository
 import com.example.gastocheck.data.repository.TransaccionRepository
+import com.example.gastocheck.ui.theme.util.CurrencyUtils
 import com.example.gastocheck.ui.theme.util.VoiceRecognizer
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -57,6 +58,7 @@ class TransferenciaViewModel @Inject constructor(
 
     private var transaccionIdEdicion: Int = -1
 
+    // SETTERS
     fun setOrigen(id: Int) { _origenId.value = id }
     fun setDestino(id: Int) { _destinoId.value = id }
     fun onMontoChange(v: String) { _monto.value = v }
@@ -64,7 +66,65 @@ class TransferenciaViewModel @Inject constructor(
     fun onFechaChange(d: Date) { _fecha.value = d }
     fun reiniciarEstadoVoz() { _estadoVoz.value = EstadoVoz.Inactivo }
 
-    // --- LÓGICA DE VOZ (Reutilizamos la lógica híbrida) ---
+    // --- INICIALIZACIÓN (Edición o Voz Externa) ---
+    fun inicializar(id: Int = -1, textoVoz: String? = null) {
+        if (textoVoz != null) {
+            // Si viene texto de voz desde Home, lo procesamos
+            procesarTextoHibrido(textoVoz)
+            return
+        }
+
+        if (id != -1) {
+            transaccionIdEdicion = id
+            viewModelScope.launch {
+                val t = repository.getTransaccionById(id)
+                if (t != null) {
+                    _monto.value = t.monto.toString()
+                    _fecha.value = t.fecha
+                    val tPareja = repository.getTransaccionPareja(t)
+                    if (t.esIngreso) {
+                        _destinoId.value = t.cuentaId
+                        _origenId.value = tPareja?.cuentaId ?: -1
+                    } else {
+                        _origenId.value = t.cuentaId
+                        _destinoId.value = tPareja?.cuentaId ?: -1
+                    }
+
+                    // --- LIMPIEZA DE NOTA ---
+                    val nombrePareja = tPareja?.let { p -> cuentas.value.find { it.id == p.cuentaId }?.nombre } ?: ""
+                    var notaLimpia = t.notaCompleta
+                        .replace("Transferencia a $nombrePareja", "")
+                        .replace("Recibido de $nombrePareja", "")
+                        .trim()
+
+                    // CORRECCIÓN: Si queda un punto al inicio (ej: ". prueba" o "."), lo quitamos
+                    if (notaLimpia.startsWith(".")) {
+                        notaLimpia = notaLimpia.substring(1).trim()
+                    }
+
+                    // CORRECCIÓN: Quitamos también el detalle técnico para que no salga en el campo de edición
+                    if (notaLimpia.contains("\n(Conv:")) {
+                        notaLimpia = notaLimpia.substringBefore("\n(Conv:").trim()
+                    }
+
+                    _nota.value = notaLimpia
+                }
+            }
+        } else {
+            limpiarFormulario()
+        }
+    }
+
+    private fun limpiarFormulario() {
+        transaccionIdEdicion = -1
+        _monto.value = ""
+        _nota.value = ""
+        _fecha.value = Date()
+        _origenId.value = -1
+        _destinoId.value = -1
+    }
+
+    // --- LÓGICA DE VOZ (IA) ---
 
     fun iniciarEscuchaInteligente() {
         viewModelScope.launch {
@@ -81,7 +141,6 @@ class TransferenciaViewModel @Inject constructor(
         }
     }
 
-    // --- NUEVO: Función pública para recibir texto desde HomeScreen ---
     fun procesarTextoExterno(texto: String) {
         procesarTextoHibrido(texto)
     }
@@ -135,7 +194,7 @@ class TransferenciaViewModel @Inject constructor(
         _estadoVoz.value = EstadoVoz.Exito
     }
 
-    private fun detectingCuentasLocalmente(texto: String, listaCuentas: List<CuentaEntity>) {
+    private fun detectarCuentasLocalmente(texto: String, listaCuentas: List<CuentaEntity>) {
         val cuentasEncontradas = listaCuentas.filter { cuenta ->
             texto.contains(cuenta.nombre, ignoreCase = true)
         }
@@ -146,9 +205,6 @@ class TransferenciaViewModel @Inject constructor(
             }
         }
     }
-
-    // Corrigiendo nombre para consistencia interna
-    private fun detectarCuentasLocalmente(texto: String, listaCuentas: List<CuentaEntity>) = detectingCuentasLocalmente(texto, listaCuentas)
 
     private fun extraerMontoMaster(texto: String): Double {
         val textoUnido = texto.replace(Regex("(\\d)\\s+(\\d)"), "$1$2")
@@ -190,38 +246,8 @@ class TransferenciaViewModel @Inject constructor(
         }
     }
 
-    fun inicializar(id: Int) {
-        if (id != -1) {
-            transaccionIdEdicion = id
-            viewModelScope.launch {
-                val t = repository.getTransaccionById(id)
-                if (t != null) {
-                    _monto.value = t.monto.toString()
-                    _fecha.value = t.fecha
-                    val tPareja = repository.getTransaccionPareja(t)
-                    if (t.esIngreso) {
-                        _destinoId.value = t.cuentaId
-                        _origenId.value = tPareja?.cuentaId ?: -1
-                    } else {
-                        _origenId.value = t.cuentaId
-                        _destinoId.value = tPareja?.cuentaId ?: -1
-                    }
-                    val nombrePareja = tPareja?.let { p -> cuentas.value.find { it.id == p.cuentaId }?.nombre } ?: ""
-                    var notaLimpia = t.notaCompleta.replace("Transferencia a $nombrePareja", "").replace("Recibido de $nombrePareja", "").trim()
-                    _nota.value = notaLimpia
-                }
-            }
-        } else {
-            transaccionIdEdicion = -1
-            _monto.value = ""
-            _nota.value = ""
-            _fecha.value = Date()
-            _origenId.value = -1
-            _destinoId.value = -1
-        }
-    }
-
-    fun realizarTransferencia(onSuccess: () -> Unit) {
+    // --- GUARDAR (CON CONVERSIÓN) ---
+    fun realizarTransferencia(monedaOrigen: String, onSuccess: () -> Unit) {
         val montoVal = _monto.value.toDoubleOrNull() ?: 0.0
         val origen = _origenId.value
         val destino = _destinoId.value
@@ -236,10 +262,29 @@ class TransferenciaViewModel @Inject constructor(
                 if (transaccionIdEdicion != -1) {
                     repository.eliminarTransferenciaCompleta(transaccionIdEdicion)
                 }
+
+                // --- LÓGICA CORREGIDA ---
+                var montoFinal = montoVal
+                val notaUsuario = _nota.value.trim() // Limpiamos espacios
+                var detalleTecnico: String? = null
+
+                if (monedaOrigen != "MXN") {
+                    montoFinal = CurrencyUtils.convertirAMxn(montoVal, monedaOrigen)
+
+                    val montoOrigStr = CurrencyUtils.formatCurrency(montoVal).replace("$", "")
+                    val montoFinalStr = CurrencyUtils.formatCurrency(montoFinal)
+
+                    // Solo preparamos el texto, NO lo pegamos a la nota del usuario todavía
+                    detalleTecnico = "(Conv: $montoOrigStr $monedaOrigen ≈ $montoFinalStr MXN)"
+                }
+
+                // Enviamos separado: Nota Limpia y Detalle Técnico
                 repository.realizarTransferencia(
                     origenId = origen,
                     destinoId = destino,
-                    monto = montoVal,
+                    monto = montoFinal,
+                    notaUsuario = notaUsuario,
+                    detalleTecnico = detalleTecnico,
                     fecha = _fecha.value
                 )
                 onSuccess()

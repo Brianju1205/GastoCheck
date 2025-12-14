@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.gastocheck.ui.theme.screens.agregar.AgregarViewModel
 import com.example.gastocheck.ui.theme.util.CategoriaUtils
+import com.example.gastocheck.ui.theme.util.CurrencyUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -130,11 +131,14 @@ fun ConfirmacionVozScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
+                    // Mostrar monto formateado ($1,200.00)
                     Text(
-                        text = "$$monto",
-                        fontSize = 56.sp,
+                        text = CurrencyUtils.formatCurrency(monto.toDoubleOrNull() ?: 0.0),
+                        fontSize = 48.sp, // Ajusté un poco el tamaño para evitar desbordes con cifras grandes
                         fontWeight = FontWeight.ExtraBold,
-                        color = colorTema
+                        color = colorTema,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -169,8 +173,7 @@ fun ConfirmacionVozScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // 3. Nota (CORREGIDO AQUÍ)
-                    // Usamos verticalAlignment = Alignment.Top para que si el texto es largo, la etiqueta "Nota:" se quede arriba
+                    // 3. Nota
                     Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth()) {
                         Text("Nota:", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(80.dp))
                         Text(
@@ -204,7 +207,9 @@ fun ConfirmacionVozScreen(
             ) {
                 OutlinedButton(
                     onClick = onCancelar,
-                    modifier = Modifier.weight(1f).height(56.dp)
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp)
                 ) {
                     Icon(Icons.Default.Close, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
@@ -213,9 +218,12 @@ fun ConfirmacionVozScreen(
 
                 Button(
                     onClick = {
-                        viewModel.guardarTransaccion { onConfirmar() }
+                        // CAMBIO CLAVE: Pasamos "MXN" por defecto para cumplir con el nuevo ViewModel
+                        viewModel.guardarTransaccion(monedaOrigen = "MXN") { onConfirmar() }
                     },
-                    modifier = Modifier.weight(1f).height(56.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = colorTema)
                 ) {
                     Icon(Icons.Default.Check, contentDescription = null)

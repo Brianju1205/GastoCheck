@@ -9,6 +9,7 @@ import com.example.gastocheck.data.database.entity.TransaccionEntity
 import com.example.gastocheck.data.gemini.GeminiRepository
 import com.example.gastocheck.data.repository.TransaccionRepository
 import com.example.gastocheck.ui.theme.util.CategoriaUtils
+import com.example.gastocheck.ui.theme.util.CurrencyUtils
 import com.example.gastocheck.ui.theme.util.NotaUtils
 import com.example.gastocheck.ui.theme.util.VoiceRecognizer
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -58,7 +59,6 @@ class AgregarViewModel @Inject constructor(
     private val _estadoVoz = MutableStateFlow<EstadoVoz>(EstadoVoz.Inactivo)
     val estadoVoz = _estadoVoz.asStateFlow()
 
-    // --- NUEVO: CANAL PARA REDIRECCIÓN ---
     private val _redireccionTransferencia = Channel<String>()
     val redireccionTransferencia = _redireccionTransferencia.receiveAsFlow()
 
@@ -102,7 +102,12 @@ class AgregarViewModel @Inject constructor(
             val transaccion = repository.getTransaccionById(id)
             transaccion?.let {
                 _monto.value = it.monto.toString()
-                _descripcion.value = it.notaCompleta
+
+                // Limpiamos la nota de detalles técnicos previos si existen
+                // (Opcional: puedes dejar la nota tal cual si prefieres)
+                val notaLimpia = it.notaCompleta.substringBefore("\n(Conv:")
+                _descripcion.value = notaLimpia
+
                 _esIngreso.value = it.esIngreso
                 _categoria.value = it.categoria
                 _cuentaIdSeleccionada.value = it.cuentaId
@@ -162,16 +167,12 @@ class AgregarViewModel @Inject constructor(
                 val interpretacion = geminiRepository.interpretarTexto(texto)
 
                 if (interpretacion != null) {
-
-                    // --- DETECCIÓN CLAVE: SI ES TRANSFERENCIA, REDIRIGIR ---
                     if (interpretacion.tipo.equals("TRANSFERENCIA", ignoreCase = true)) {
                         _estadoVoz.value = EstadoVoz.Inactivo
-                        // Enviamos el texto original para que la otra pantalla lo procese
                         _redireccionTransferencia.send(texto)
                         return@launch
                     }
 
-                    // --- SI NO, CONTINUAMOS COMO GASTO/INGRESO NORMAL ---
                     _monto.value = interpretacion.monto.toString()
                     _descripcion.value = interpretacion.descripcion
                     _categoria.value = interpretacion.categoria
@@ -180,19 +181,13 @@ class AgregarViewModel @Inject constructor(
                     _esIngreso.value = detectadoEsIngreso
                     _esMeta.value = texto.contains("meta", ignoreCase = true) || texto.contains("ahorro", ignoreCase = true)
 
-                    var cuentaEncontrada = cuentas.value.find {
-                        it.nombre.equals(interpretacion.cuenta_origen, ignoreCase = true)
-                    }
+                    var cuentaEncontrada = cuentas.value.find { it.nombre.equals(interpretacion.cuenta_origen, ignoreCase = true) }
                     if (cuentaEncontrada == null) {
-                        cuentaEncontrada = cuentas.value.find {
-                            texto.contains(it.nombre, ignoreCase = true)
-                        }
+                        cuentaEncontrada = cuentas.value.find { texto.contains(it.nombre, ignoreCase = true) }
                     }
-
                     if (cuentaEncontrada != null) {
                         _cuentaIdSeleccionada.value = cuentaEncontrada.id
                     }
-
                     _estadoVoz.value = EstadoVoz.Exito(detectadoEsIngreso)
                 } else {
                     procesarVozLocal(texto)
@@ -205,8 +200,6 @@ class AgregarViewModel @Inject constructor(
 
     private fun procesarVozLocal(texto: String) {
         val textoLower = texto.lowercase()
-
-        // Detección local básica de transferencia si falla internet
         if (textoLower.contains("transfer") || textoLower.contains("pasar a")) {
             viewModelScope.launch {
                 _estadoVoz.value = EstadoVoz.Inactivo
@@ -216,20 +209,9 @@ class AgregarViewModel @Inject constructor(
         }
 
         val esIngresoDetectado = textoLower.contains("ingreso") || textoLower.contains("gané")
-        val esMetaDetectada = textoLower.contains("meta") || textoLower.contains("ahorro")
-
         _esIngreso.value = esIngresoDetectado
-        _esMeta.value = esMetaDetectada
         _monto.value = extraerMontoMaster(texto).toString()
         _descripcion.value = texto
-
-        for (cat in CategoriaUtils.listaCategorias) {
-            if (textoLower.contains(cat.nombre.lowercase())) {
-                _categoria.value = cat.nombre
-                break
-            }
-        }
-        detectarCuentaEnTexto(texto)
         _estadoVoz.value = EstadoVoz.Exito(esIngresoDetectado)
     }
 
@@ -238,51 +220,49 @@ class AgregarViewModel @Inject constructor(
         val regex = Regex("[0-9.,]+")
         val matches = regex.findAll(textoUnido)
         var mejorMonto = 0.0
-
         for (match in matches) {
-            var str = match.value
-            if (str.startsWith(".") || str.startsWith(",")) str = str.substring(1)
-            if (str.endsWith(".") || str.endsWith(",")) str = str.substring(0, str.length - 1)
-            if (str.isEmpty()) continue
-
-            if (!str.contains(".") && !str.contains(",")) {
-                val valor = str.toDoubleOrNull() ?: 0.0
-                if (valor > mejorMonto) mejorMonto = valor
-                continue
-            }
-            val ultimoPunto = str.lastIndexOf('.')
-            val ultimaComa = str.lastIndexOf(',')
-            val ultimoSep = max(ultimoPunto, ultimaComa)
-            val digitosDespues = str.length - 1 - ultimoSep
-            var montoCandidato = 0.0
-
-            if (digitosDespues == 3) {
-                val limpio = str.replace(".", "").replace(",", "")
-                montoCandidato = limpio.toDoubleOrNull() ?: 0.0
-            } else {
-                val parteEntera = str.substring(0, ultimoSep).replace(".", "").replace(",", "")
-                val parteDecimal = str.substring(ultimoSep + 1)
-                montoCandidato = "$parteEntera.$parteDecimal".toDoubleOrNull() ?: 0.0
-            }
-            if (montoCandidato > mejorMonto) mejorMonto = montoCandidato
+            val valor = match.value.replace(",", "").toDoubleOrNull() ?: 0.0
+            if (valor > mejorMonto) mejorMonto = valor
         }
         return mejorMonto
     }
 
-    // --- GUARDADO ---
-    fun guardarTransaccion(onGuardadoExitoso: () -> Unit) {
-        val montoVal = _monto.value.toDoubleOrNull() ?: 0.0
-        val notaCompletaFinal = if (_descripcion.value.isBlank()) _categoria.value else _descripcion.value
-        val notaResumenGenerada = NotaUtils.generarResumen(notaCompletaFinal, _categoria.value)
+    // --- GUARDADO CORREGIDO ---
+    // Ahora separamos el Resumen (limpio) del Detalle Completo (con conversión)
+    fun guardarTransaccion(monedaOrigen: String, onGuardadoExitoso: () -> Unit) {
+        val montoOriginal = _monto.value.toDoubleOrNull() ?: 0.0
 
-        if (montoVal > 0) {
+        if (montoOriginal > 0) {
             viewModelScope.launch {
+                var montoFinal = montoOriginal
+
+                // 1. Nota del Usuario (Limpia)
+                val notaUsuario = if (_descripcion.value.isBlank()) _categoria.value else _descripcion.value
+
+                // 2. Cálculo de Conversión
+                var detalleConversion = ""
+                if (monedaOrigen != "MXN") {
+                    montoFinal = CurrencyUtils.convertirAMxn(montoOriginal, monedaOrigen)
+
+                    val montoOrigStr = CurrencyUtils.formatCurrency(montoOriginal).replace("$", "")
+                    val montoFinalStr = CurrencyUtils.formatCurrency(montoFinal)
+
+                    // Preparamos el texto que SOLO irá a detalles
+                    detalleConversion = "\n(Conv: $montoOrigStr $monedaOrigen ≈ $montoFinalStr MXN)"
+                }
+
+                // 3. Generamos Resumen SOLO con la nota del usuario (así la lista se ve limpia)
+                val notaResumenGenerada = NotaUtils.generarResumen(notaUsuario, _categoria.value)
+
+                // 4. Generamos Nota Completa combinando ambas (para el diálogo de detalles)
+                val notaCompletaFinal = notaUsuario + detalleConversion
+
                 val t = TransaccionEntity(
                     id = if (currentId == -1) 0 else currentId,
-                    monto = montoVal,
+                    monto = montoFinal,
                     categoria = _categoria.value,
-                    notaCompleta = notaCompletaFinal,
-                    notaResumen = notaResumenGenerada,
+                    notaCompleta = notaCompletaFinal, // Aquí va el detalle técnico
+                    notaResumen = notaResumenGenerada, // Aquí va limpio
                     fecha = _fecha.value,
                     esIngreso = _esIngreso.value,
                     cuentaId = _cuentaIdSeleccionada.value

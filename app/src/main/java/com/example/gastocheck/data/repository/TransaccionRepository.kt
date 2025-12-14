@@ -27,5 +27,11 @@ interface TransaccionRepository {
     suspend fun deleteCuenta(cuenta: CuentaEntity)
 
     suspend fun eliminarTransferenciaCompleta(id: Int)
-    suspend fun realizarTransferencia(origenId: Int, destinoId: Int, monto: Double, fecha: Date)
-}
+    suspend fun realizarTransferencia(
+        origenId: Int,
+        destinoId: Int,
+        monto: Double,
+        notaUsuario: String,
+        detalleTecnico: String?, // Aquí irá la conversión (opcional)
+        fecha: Date
+    )}

@@ -1,6 +1,5 @@
 package com.example.gastocheck.ui.theme.screens.agregar
 
-import android.Manifest
 import android.app.DatePickerDialog
 import android.widget.DatePicker
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -11,10 +10,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -26,11 +27,14 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.gastocheck.ui.theme.components.CampoMontoOriginal
 import com.example.gastocheck.ui.theme.util.CategoriaUtils
 import com.example.gastocheck.ui.theme.util.DateUtils
 import java.util.Calendar
@@ -49,12 +53,12 @@ fun AgregarScreen(
     val cuentaId by viewModel.cuentaIdSeleccionada.collectAsState()
     val cuentas by viewModel.cuentas.collectAsState()
 
+    var monedaLocal by remember { mutableStateOf("MXN") }
     val actionColor = if (esIngreso) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
 
     var showCategorySheet by remember { mutableStateOf(false) }
     var showAccountMenu by remember { mutableStateOf(false) }
 
-    // (El permissionLauncher ya no se usa porque quitamos el botón, pero lo dejamos por si acaso)
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
         if (isGranted) viewModel.iniciarEscuchaInteligente()
     }
@@ -76,6 +80,7 @@ fun AgregarScreen(
     )
 
     Scaffold(
+        modifier = Modifier.imePadding(), // <--- 1. Ajuste automático por teclado
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             CenterAlignedTopAppBar(
@@ -88,7 +93,11 @@ fun AgregarScreen(
         }
     ) { padding ->
         Column(
-            modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp),
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()) // <--- 2. Habilita el scroll
+                .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // 1. SELECTOR DE CUENTA
@@ -118,22 +127,15 @@ fun AgregarScreen(
 
             // 2. MONTO
             Text("Monto", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
-            BasicTextField(
-                value = monto,
-                onValueChange = { viewModel.onMontoChange(it) },
-                textStyle = TextStyle(color = MaterialTheme.colorScheme.onBackground, fontSize = 56.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                cursorBrush = SolidColor(actionColor),
-                modifier = Modifier.fillMaxWidth(),
-                decorationBox = { innerTextField ->
-                    Box(contentAlignment = Alignment.Center) {
-                        if (monto.isEmpty()) Text("$ 0.00", color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), fontSize = 56.sp, fontWeight = FontWeight.Bold)
-                        innerTextField()
-                    }
-                }
+            CampoMontoOriginal(
+                valor = monto,
+                onValorChange = { viewModel.onMontoChange(it) },
+                monedaSeleccionada = monedaLocal,
+                onMonedaChange = { monedaLocal = it },
+                colorTexto = actionColor
             )
 
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
             // 3. DATOS
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
@@ -141,23 +143,36 @@ fun AgregarScreen(
                     ListItemConfig(icon = CategoriaUtils.getIcono(categoria), iconTint = try { CategoriaUtils.getColor(categoria) } catch (e: Exception) { MaterialTheme.colorScheme.primary }, label = "Categoría", value = categoria, onClick = { showCategorySheet = true })
                     Divider(color = MaterialTheme.colorScheme.background, thickness = 1.dp)
 
-                    Row(modifier = Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    // CAMPO NOTA
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp))
                         Spacer(modifier = Modifier.width(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text("Nota", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
 
-                            // CAMPO NOTA
-                            BasicTextField(
-                                value = descripcion,
-                                onValueChange = { viewModel.onDescripcionChange(it) },
-                                textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp),
-                                cursorBrush = SolidColor(actionColor),
-                                decorationBox = { inner ->
-                                    if(descripcion.isEmpty()) Text("Añadir nota (opcional)", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), fontSize = 16.sp)
-                                    inner()
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                if(descripcion.isEmpty()) {
+                                    Text("Añadir nota (opcional)", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), fontSize = 16.sp)
                                 }
-                            )
+                                BasicTextField(
+                                    value = descripcion,
+                                    onValueChange = { viewModel.onDescripcionChange(it) },
+                                    textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp),
+                                    cursorBrush = SolidColor(actionColor),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    keyboardOptions = KeyboardOptions(
+                                        capitalization = KeyboardCapitalization.Sentences,
+                                        keyboardType = KeyboardType.Text,
+                                        imeAction = ImeAction.Default
+                                    ),
+                                    maxLines = 4
+                                )
+                            }
                         }
                     }
                     Divider(color = MaterialTheme.colorScheme.background, thickness = 1.dp)
@@ -166,35 +181,29 @@ fun AgregarScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.weight(1f))
+            // Cambiamos el Spacer flexible por uno fijo para que funcione el scroll
+            Spacer(modifier = Modifier.height(32.dp))
 
-            // 4. BOTÓN GUARDAR (SIN MICROFONO)
-            // Ahora ocupa todo el ancho disponible
+            // 4. BOTÓN GUARDAR
             Button(
-                onClick = { viewModel.guardarTransaccion { alRegresar() } },
+                onClick = { viewModel.guardarTransaccion(monedaLocal) { alRegresar() } },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = actionColor, contentColor = MaterialTheme.colorScheme.onPrimary)
+                colors = ButtonDefaults.buttonColors(containerColor = actionColor)
             ) {
                 Text("Guardar", fontSize = 18.sp, fontWeight = FontWeight.Bold)
             }
+
+            // Espacio extra al final para que el teclado no tape el botón
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 
     if (showCategorySheet) {
         ModalBottomSheet(onDismissRequest = { showCategorySheet = false }, containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface) {
             Column(modifier = Modifier.padding(16.dp)) {
-                // Título dinámico
-                Text(
-                    text = if (esIngreso) "Categorías de Ingreso" else "Categorías de Gasto",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-
-                // Lógica de filtrado de categorías
+                Text(text = if (esIngreso) "Categorías de Ingreso" else "Categorías de Gasto", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
                 val listaMostrar = CategoriaUtils.obtenerCategoriasPorTipo(esIngreso)
-
                 LazyVerticalGrid(columns = GridCells.Adaptive(minSize = 80.dp), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     items(listaMostrar) { cat ->
                         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { viewModel.onCategoriaChange(cat.nombre); showCategorySheet = false }.padding(8.dp)) {
