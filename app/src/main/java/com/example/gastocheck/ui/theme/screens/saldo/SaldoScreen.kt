@@ -3,8 +3,8 @@ package com.example.gastocheck.ui.theme.screens.saldo
 import android.graphics.Paint
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures // <--- IMPORTANTE
-import androidx.compose.foundation.gestures.detectTapGestures            // <--- IMPORTANTE
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -15,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.rounded.AutoGraph
 import androidx.compose.material.icons.rounded.TrendingDown
@@ -30,7 +31,7 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput // <--- IMPORTANTE
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -64,6 +65,8 @@ fun SaldoScreen(
         )
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        // Selector de Periodo
         PeriodoSelector(selected = state.periodoSeleccionado, onSelect = onPeriodoSelected)
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -77,7 +80,7 @@ fun SaldoScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Gráfica
+        // Gráfica Interactiva
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
             shape = RoundedCornerShape(16.dp),
@@ -87,7 +90,6 @@ fun SaldoScreen(
                 Text("Evolución", style = MaterialTheme.typography.labelLarge)
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Si no hay puntos, mostramos mensaje
                 if (state.historialPuntos.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text("Sin datos suficientes", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -105,19 +107,34 @@ fun SaldoScreen(
         }
 
         Spacer(modifier = Modifier.height(24.dp))
+
+        // KPIs
         Text("Indicadores Clave", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
         KpiGrid(state)
+
         Spacer(modifier = Modifier.height(24.dp))
 
+        // Alertas
         if (state.alertaTexto != null) {
-            AlertaCard(mensaje = state.alertaTexto)
+            AlertaCard(mensaje = state.alertaTexto!!)
             Spacer(modifier = Modifier.height(16.dp))
         }
 
+        // Recomendación Inteligente (Nuevo)
+        if (state.recomendacion != null) {
+            RecomendacionCard(texto = state.recomendacion!!)
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // Proyecciones
         ProyeccionesSection(state)
+
         Spacer(modifier = Modifier.height(16.dp))
+
+        // Insights
         InsightCard(text = state.insightIa)
+
         Spacer(modifier = Modifier.height(80.dp))
     }
 }
@@ -405,6 +422,40 @@ fun AlertaCard(mensaje: String) {
             Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
             Spacer(modifier = Modifier.width(12.dp))
             Text(mensaje, color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+@Composable
+fun RecomendacionCard(texto: String) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+        ),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Lightbulb,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    "Recomendación para ti",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = texto,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
         }
     }
 }

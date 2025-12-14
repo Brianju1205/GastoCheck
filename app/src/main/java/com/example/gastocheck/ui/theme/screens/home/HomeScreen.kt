@@ -444,7 +444,6 @@ fun ItemTransaccionModerno(
     // --- LÓGICA DE ICONO ACTUALIZADA ---
     // Usamos IconoUtils.getIconoByName para soportar "Netflix", "Spotify", etc.
     val icono = IconoUtils.getIconoByName(transaccion.categoria)
-
     // Para el color, intentamos ver si es un servicio conocido
     val serviceColor = ServiceColorUtils.getColorByName(transaccion.categoria)
     // Si ServiceColor devuelve el default (Verde), probamos con CategoriaUtils (para gastos normales)
@@ -496,8 +495,8 @@ fun CardProgresoAhorro(nombre: String, ahorrado: Double, meta: Double, iconoNomb
     val colorNeon = Color(0xFF00E676)
 
     // Obtenemos el vector del icono
-    val iconoVector = getIconoByNameHome(iconoNombre)
-
+    //val iconoVector = getIconoByNameHome(iconoNombre)
+    val iconoVector = IconoUtils.getIconoByName(iconoNombre)
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
         shape = RoundedCornerShape(24.dp),
