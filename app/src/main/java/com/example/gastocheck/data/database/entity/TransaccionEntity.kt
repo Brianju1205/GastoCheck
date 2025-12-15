@@ -27,5 +27,6 @@ data class TransaccionEntity(
     val notaResumen: String,  // NUEVO: Para mostrar en la lista principal (ej. "Oxxo").
     val fecha: Date,
     val esIngreso: Boolean,
-    val cuentaId: Int
+    val cuentaId: Int,
+    val fotoUri: String? = null
 )

@@ -4,6 +4,7 @@ import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -52,6 +53,9 @@ import com.example.gastocheck.ui.theme.util.IconoUtils
 import com.example.gastocheck.ui.theme.util.ServiceColorUtils
 import kotlinx.coroutines.launch
 import java.util.Date
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
+import androidx.compose.ui.window.DialogProperties
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -405,17 +409,21 @@ fun DetalleTransaccionDialog(
     onEdit: () -> Unit
 ) {
     val isTransfer = transaccion.categoria == "Transferencia"
+    var mostrarFoto by remember { mutableStateOf(false) } // Estado para abrir la foto
 
-    // --- LÓGICA DE ICONO ACTUALIZADA ---
+    // Lógica de Icono y Color
     val (icono, color) = if (isTransfer && cuenta != null) {
         val c = try { Color(android.graphics.Color.parseColor(cuenta.colorHex)) } catch(e:Exception){ MaterialTheme.colorScheme.primary }
         Pair(IconoUtils.getIconoByName(cuenta.icono), c)
     } else {
-        // Intenta obtener color de servicio, si no, usa el de categoría
         val serviceColor = ServiceColorUtils.getColorByName(transaccion.categoria)
         val finalColor = if (serviceColor != Color(0xFF00E676)) serviceColor else CategoriaUtils.getColor(transaccion.categoria)
-
         Pair(IconoUtils.getIconoByName(transaccion.categoria), finalColor)
+    }
+
+    // --- DIÁLOGO DE LA FOTO ---
+    if (mostrarFoto && !transaccion.fotoUri.isNullOrEmpty()) {
+        DialogoVerComprobante(fotoUri = transaccion.fotoUri, onDismiss = { mostrarFoto = false })
     }
 
     AlertDialog(
@@ -424,23 +432,54 @@ fun DetalleTransaccionDialog(
         icon = { Icon(icono, null, tint = color, modifier = Modifier.size(48.dp)) },
         title = { Text(transaccion.categoria) },
         text = {
-            Column {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) { // Centrado
                 Text(CurrencyUtils.formatCurrency(transaccion.monto), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+
                 Spacer(Modifier.height(8.dp))
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(4.dp))
                     Text(cuenta?.nombre ?: "Cuenta", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                 }
-                Spacer(Modifier.height(8.dp))
-                // Aquí usamos notaCompleta para ver el detalle de conversión
-                Text(transaccion.notaCompleta.ifEmpty { "Sin nota" })
-                Spacer(Modifier.height(4.dp))
-                Text(DateUtils.formatearFechaAmigable(transaccion.fecha), style = MaterialTheme.typography.bodySmall)
+
+                Spacer(Modifier.height(16.dp))
+
+                // Nota
+                if (transaccion.notaCompleta.isNotEmpty()) {
+                    Text(transaccion.notaCompleta, textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(4.dp))
+                }
+
+                Text(DateUtils.formatearFechaAmigable(transaccion.fecha), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                // --- ICONO DE COMPROBANTE DISCRETO ---
+                // Solo aparece si hay fotoUri
+                if (!transaccion.fotoUri.isNullOrEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+
+                    FilledTonalIconButton(
+                        onClick = { mostrarFoto = true },
+                        modifier = Modifier.size(40.dp) // Tamaño discreto
+                    ) {
+                        // Icono de documento/archivo
+                        Icon(
+                            imageVector = Icons.Default.Description, // O "Image" si prefieres
+                            contentDescription = "Ver comprobante",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
             }
         },
         confirmButton = { TextButton(onClick = onEdit) { Text("Editar") } },
-        dismissButton = { Row { TextButton(onClick = onDelete) { Text("Eliminar") }; TextButton(onClick = onDismiss) { Text("Cerrar") } } }
+        dismissButton = {
+            Row {
+                TextButton(onClick = onDelete) { Text("Eliminar", color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = onDismiss) { Text("Cerrar") }
+            }
+        }
     )
 }
 
@@ -686,4 +725,38 @@ fun ItemTransferencia(
 fun DialogoEditarSaldo(saldoActual: Double, onDismiss: () -> Unit, onConfirm: (Double) -> Unit) {
     var texto by remember { mutableStateOf(saldoActual.toString()) }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Ajustar Saldo Base") }, text = { OutlinedTextField(value = texto, onValueChange = { texto = it }, label = { Text("Saldo Inicial ($)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)) }, confirmButton = { Button(onClick = { val n = texto.toDoubleOrNull(); if (n != null) onConfirm(n) }) { Text("Guardar") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } })
+}
+
+// comprobante de las fotos
+@Composable
+fun DialogoVerComprobante(fotoUri: String, onDismiss: () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false) // Ocupa toda la pantalla
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+        ) {
+            // Imagen
+            AsyncImage(
+                model = fotoUri,
+                contentDescription = "Comprobante",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit // Ajusta para ver la foto completa
+            )
+
+            // Botón Cerrar (X) arriba a la derecha
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp)
+                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+            ) {
+                Icon(Icons.Default.Close, null, tint = Color.White)
+            }
+        }
+    }
 }

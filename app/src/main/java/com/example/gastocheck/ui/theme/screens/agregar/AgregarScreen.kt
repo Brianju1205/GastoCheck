@@ -1,8 +1,13 @@
 package com.example.gastocheck.ui.theme.screens.agregar
 
+import android.Manifest
 import android.app.DatePickerDialog
+import android.content.pm.PackageManager
+import android.net.Uri
 import android.widget.DatePicker
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,7 +28,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -33,10 +41,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.example.gastocheck.ui.theme.components.CampoMontoOriginal
 import com.example.gastocheck.ui.theme.util.CategoriaUtils
 import com.example.gastocheck.ui.theme.util.DateUtils
+import com.example.gastocheck.ui.theme.util.ImageUtils
 import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,6 +56,7 @@ fun AgregarScreen(
     viewModel: AgregarViewModel = hiltViewModel(),
     alRegresar: () -> Unit
 ) {
+    // ... (Tus variables de estado existentes: monto, descripción, etc.) ...
     val monto by viewModel.monto.collectAsState()
     val descripcion by viewModel.descripcion.collectAsState()
     val categoria by viewModel.categoria.collectAsState()
@@ -53,20 +65,54 @@ fun AgregarScreen(
     val cuentaId by viewModel.cuentaIdSeleccionada.collectAsState()
     val cuentas by viewModel.cuentas.collectAsState()
 
+    // FOTO Y BOTTOM SHEET
+    val fotoUriGuardada by viewModel.fotoUri.collectAsState()
+    var tempPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    var showBottomSheet by remember { mutableStateOf(false) } // Controla el menú
+
     var monedaLocal by remember { mutableStateOf("MXN") }
     val actionColor = if (esIngreso) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
 
     var showCategorySheet by remember { mutableStateOf(false) }
     var showAccountMenu by remember { mutableStateOf(false) }
 
+    val context = LocalContext.current
+
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
         if (isGranted) viewModel.iniciarEscuchaInteligente()
     }
 
-    val context = LocalContext.current
+    // 1. LAUNCHER CÁMARA (Captura)
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        if (success && tempPhotoUri != null) {
+            viewModel.onFotoCapturada(tempPhotoUri.toString())
+        }
+    }
+
+    // 2. LAUNCHER PERMISO CÁMARA
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+        if (isGranted) {
+            val uri = ImageUtils.crearUriParaFoto(context)
+            tempPhotoUri = uri
+            cameraLauncher.launch(uri)
+        } else {
+            Toast.makeText(context, "Se requiere permiso para tomar fotos", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // 3. NUEVO: LAUNCHER GALERÍA (Subir Archivo)
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            // El usuario seleccionó una imagen de la galería
+            viewModel.onFotoCapturada(uri.toString())
+        }
+    }
+
+    // ... (Calendar, DatePickerDialog...) ...
     val calendar = Calendar.getInstance()
     calendar.time = fecha
-
     val datePickerDialog = DatePickerDialog(
         context,
         { _: DatePicker, year: Int, month: Int, dayOfMonth: Int ->
@@ -80,14 +126,12 @@ fun AgregarScreen(
     )
 
     Scaffold(
-        modifier = Modifier.imePadding(), // <--- 1. Ajuste automático por teclado
+        modifier = Modifier.imePadding(),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text(if (esIngreso) "Registrar Ingreso" else "Registrar Gasto", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground) },
-                navigationIcon = {
-                    IconButton(onClick = alRegresar) { Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = MaterialTheme.colorScheme.onBackground) }
-                },
+                navigationIcon = { IconButton(onClick = alRegresar) { Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = MaterialTheme.colorScheme.onBackground) } },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         }
@@ -96,10 +140,12 @@ fun AgregarScreen(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState()) // <--- 2. Habilita el scroll
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // ... (Selector Cuenta, Monto...) ...
+
             // 1. SELECTOR DE CUENTA
             Box {
                 Surface(
@@ -154,7 +200,6 @@ fun AgregarScreen(
                         Spacer(modifier = Modifier.width(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text("Nota", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
-
                             Box(modifier = Modifier.fillMaxWidth()) {
                                 if(descripcion.isEmpty()) {
                                     Text("Añadir nota (opcional)", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), fontSize = 16.sp)
@@ -175,13 +220,46 @@ fun AgregarScreen(
                             }
                         }
                     }
+
+                    Divider(color = MaterialTheme.colorScheme.background, thickness = 1.dp)
+
+                    // --- SECCIÓN DE FOTO MEJORADA ---
+                    if (fotoUriGuardada == null) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showBottomSheet = true } // <--- ABRE EL BOTTOM SHEET
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Icono de "Adjuntar" (Clip o Cámara con más)
+                            Icon(Icons.Default.AttachFile, null, tint = actionColor)
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Text("Adjuntar comprobante", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    } else {
+                        Box(modifier = Modifier.fillMaxWidth().height(200.dp)) {
+                            AsyncImage(
+                                model = fotoUriGuardada,
+                                contentDescription = "Foto recibo",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                            IconButton(
+                                onClick = { viewModel.onEliminarFoto() },
+                                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                            ) {
+                                Icon(Icons.Default.Close, null, tint = Color.White)
+                            }
+                        }
+                    }
+
                     Divider(color = MaterialTheme.colorScheme.background, thickness = 1.dp)
 
                     ListItemConfig(icon = Icons.Default.CalendarToday, iconTint = actionColor, label = "Fecha", value = DateUtils.formatearFechaAmigable(fecha), onClick = { datePickerDialog.show() })
                 }
             }
 
-            // Cambiamos el Spacer flexible por uno fijo para que funcione el scroll
             Spacer(modifier = Modifier.height(32.dp))
 
             // 4. BOTÓN GUARDAR
@@ -193,12 +271,76 @@ fun AgregarScreen(
             ) {
                 Text("Guardar", fontSize = 18.sp, fontWeight = FontWeight.Bold)
             }
-
-            // Espacio extra al final para que el teclado no tape el botón
             Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // --- BOTTOM SHEET DE OPCIONES ---
+        if (showBottomSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showBottomSheet = false },
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                Column(modifier = Modifier.padding(bottom = 32.dp)) {
+                    Text(
+                        "Adjuntar comprobante",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(16.dp).align(Alignment.CenterHorizontally)
+                    )
+
+                    // OPCIÓN 1: SUBIR ARCHIVO (Galería)
+                    ListItem(
+                        headlineContent = { Text("Subir archivo") },
+                        leadingContent = { Icon(Icons.Default.UploadFile, null, tint = MaterialTheme.colorScheme.primary) },
+                        modifier = Modifier.clickable {
+                            showBottomSheet = false
+                            // Solo imágenes por ahora
+                            photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        }
+                    )
+
+                    // OPCIÓN 2: TOMAR FOTO (Cámara)
+                    ListItem(
+                        headlineContent = { Text("Tomar foto") },
+                        leadingContent = { Icon(Icons.Default.CameraAlt, null, tint = MaterialTheme.colorScheme.primary) },
+                        modifier = Modifier.clickable {
+                            showBottomSheet = false
+                            // Lógica de permisos de cámara
+                            val permission = Manifest.permission.CAMERA
+                            if (ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED) {
+                                val uri = ImageUtils.crearUriParaFoto(context)
+                                tempPhotoUri = uri
+                                cameraLauncher.launch(uri)
+                            } else {
+                                cameraPermissionLauncher.launch(permission)
+                            }
+                        }
+                    )
+
+                    // OPCIÓN 3: ESCANEAR (Premium - Pendiente)
+                    ListItem(
+                        headlineContent = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Escanear recibo")
+                                Spacer(Modifier.width(8.dp))
+                                // Badge Premium
+                                Surface(color = Color(0xFFFFD700), shape = RoundedCornerShape(4.dp)) {
+                                    Text("PRO", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.Black, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
+                                }
+                            }
+                        },
+                        leadingContent = { Icon(Icons.Default.DocumentScanner, null, tint = Color.Gray) },
+                        modifier = Modifier.clickable {
+                            // Pendiente
+                            Toast.makeText(context, "Función Premium próximamente", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                }
+            }
         }
     }
 
+    // ... (El resto de tus Sheets: showCategorySheet...)
     if (showCategorySheet) {
         ModalBottomSheet(onDismissRequest = { showCategorySheet = false }, containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface) {
             Column(modifier = Modifier.padding(16.dp)) {

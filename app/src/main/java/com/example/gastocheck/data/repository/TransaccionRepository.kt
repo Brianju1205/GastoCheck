@@ -32,6 +32,7 @@ interface TransaccionRepository {
         destinoId: Int,
         monto: Double,
         notaUsuario: String,
-        detalleTecnico: String?, // Aquí irá la conversión (opcional)
+        detalleTecnico: String?,
+        fotoUri: String?, // <--- Nuevo parámetro
         fecha: Date
     )}

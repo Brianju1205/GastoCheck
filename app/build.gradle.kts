@@ -73,7 +73,7 @@ dependencies {
     // --- NETWORKING (Retrofit) ---
     implementation(libs.retrofit)
     implementation(libs.retrofit.gson)
-
+    implementation("io.coil-kt:coil-compose:2.5.0")
     // Fix para conflictos de anotaciones
     implementation("org.jetbrains:annotations:23.0.0")
     modules {

@@ -42,6 +42,10 @@ class TransferenciaViewModel @Inject constructor(
     private val _fecha = MutableStateFlow(Date())
     val fecha = _fecha.asStateFlow()
 
+    // --- NUEVO: ESTADO FOTO ---
+    private val _fotoUri = MutableStateFlow<String?>(null)
+    val fotoUri = _fotoUri.asStateFlow()
+
     private val _uiEvent = Channel<String>()
     val uiEvent = _uiEvent.receiveAsFlow()
 
@@ -64,6 +68,11 @@ class TransferenciaViewModel @Inject constructor(
     fun onMontoChange(v: String) { _monto.value = v }
     fun onNotaChange(v: String) { _nota.value = v }
     fun onFechaChange(d: Date) { _fecha.value = d }
+
+    // Setters de Foto
+    fun onFotoCapturada(uri: String) { _fotoUri.value = uri }
+    fun onEliminarFoto() { _fotoUri.value = null }
+
     fun reiniciarEstadoVoz() { _estadoVoz.value = EstadoVoz.Inactivo }
 
     // --- INICIALIZACIÓN (Edición o Voz Externa) ---
@@ -97,17 +106,18 @@ class TransferenciaViewModel @Inject constructor(
                         .replace("Recibido de $nombrePareja", "")
                         .trim()
 
-                    // CORRECCIÓN: Si queda un punto al inicio (ej: ". prueba" o "."), lo quitamos
+                    // Correcciones de formato de nota
                     if (notaLimpia.startsWith(".")) {
                         notaLimpia = notaLimpia.substring(1).trim()
                     }
-
-                    // CORRECCIÓN: Quitamos también el detalle técnico para que no salga en el campo de edición
                     if (notaLimpia.contains("\n(Conv:")) {
                         notaLimpia = notaLimpia.substringBefore("\n(Conv:").trim()
                     }
 
                     _nota.value = notaLimpia
+
+                    // Cargar Foto si existe
+                    _fotoUri.value = t.fotoUri
                 }
             }
         } else {
@@ -122,6 +132,7 @@ class TransferenciaViewModel @Inject constructor(
         _fecha.value = Date()
         _origenId.value = -1
         _destinoId.value = -1
+        _fotoUri.value = null // Limpiar foto
     }
 
     // --- LÓGICA DE VOZ (IA) ---
@@ -246,7 +257,7 @@ class TransferenciaViewModel @Inject constructor(
         }
     }
 
-    // --- GUARDAR (CON CONVERSIÓN) ---
+    // --- GUARDAR (CON CONVERSIÓN Y FOTO) ---
     fun realizarTransferencia(monedaOrigen: String, onSuccess: () -> Unit) {
         val montoVal = _monto.value.toDoubleOrNull() ?: 0.0
         val origen = _origenId.value
@@ -263,9 +274,9 @@ class TransferenciaViewModel @Inject constructor(
                     repository.eliminarTransferenciaCompleta(transaccionIdEdicion)
                 }
 
-                // --- LÓGICA CORREGIDA ---
+                // --- LÓGICA DE CONVERSIÓN ---
                 var montoFinal = montoVal
-                val notaUsuario = _nota.value.trim() // Limpiamos espacios
+                val notaUsuario = _nota.value.trim()
                 var detalleTecnico: String? = null
 
                 if (monedaOrigen != "MXN") {
@@ -274,17 +285,17 @@ class TransferenciaViewModel @Inject constructor(
                     val montoOrigStr = CurrencyUtils.formatCurrency(montoVal).replace("$", "")
                     val montoFinalStr = CurrencyUtils.formatCurrency(montoFinal)
 
-                    // Solo preparamos el texto, NO lo pegamos a la nota del usuario todavía
                     detalleTecnico = "(Conv: $montoOrigStr $monedaOrigen ≈ $montoFinalStr MXN)"
                 }
 
-                // Enviamos separado: Nota Limpia y Detalle Técnico
+                // --- GUARDADO CON FOTO ---
                 repository.realizarTransferencia(
                     origenId = origen,
                     destinoId = destino,
                     monto = montoFinal,
                     notaUsuario = notaUsuario,
                     detalleTecnico = detalleTecnico,
+                    fotoUri = _fotoUri.value, // <--- Se envía la foto
                     fecha = _fecha.value
                 )
                 onSuccess()

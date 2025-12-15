@@ -48,6 +48,10 @@ class AgregarViewModel @Inject constructor(
     private val _esMeta = MutableStateFlow(false)
     val esMeta = _esMeta.asStateFlow()
 
+    // --- NUEVO: ESTADO FOTO ---
+    private val _fotoUri = MutableStateFlow<String?>(null)
+    val fotoUri = _fotoUri.asStateFlow()
+
     // --- ESTADOS DE CUENTAS ---
     val cuentas: StateFlow<List<CuentaEntity>> = repository.getCuentas()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -94,6 +98,7 @@ class AgregarViewModel @Inject constructor(
         _categoria.value = "Otros"
         _fecha.value = Date()
         _esMeta.value = false
+        _fotoUri.value = null // Limpiamos la foto
     }
 
     private fun cargarTransaccion(id: Int) {
@@ -104,7 +109,6 @@ class AgregarViewModel @Inject constructor(
                 _monto.value = it.monto.toString()
 
                 // Limpiamos la nota de detalles técnicos previos si existen
-                // (Opcional: puedes dejar la nota tal cual si prefieres)
                 val notaLimpia = it.notaCompleta.substringBefore("\n(Conv:")
                 _descripcion.value = notaLimpia
 
@@ -112,6 +116,7 @@ class AgregarViewModel @Inject constructor(
                 _categoria.value = it.categoria
                 _cuentaIdSeleccionada.value = it.cuentaId
                 _fecha.value = it.fecha
+                _fotoUri.value = it.fotoUri // Recuperamos la foto si existe
             }
         }
     }
@@ -122,6 +127,10 @@ class AgregarViewModel @Inject constructor(
     fun onCategoriaChange(n: String) { _categoria.value = n }
     fun onFechaChange(n: Date) { _fecha.value = n }
     fun reiniciarEstadoVoz() { _estadoVoz.value = EstadoVoz.Inactivo }
+
+    // Setters de Foto
+    fun onFotoCapturada(uri: String) { _fotoUri.value = uri }
+    fun onEliminarFoto() { _fotoUri.value = null }
 
     fun onDescripcionChange(nuevoTexto: String) {
         _descripcion.value = nuevoTexto
@@ -227,8 +236,7 @@ class AgregarViewModel @Inject constructor(
         return mejorMonto
     }
 
-    // --- GUARDADO CORREGIDO ---
-    // Ahora separamos el Resumen (limpio) del Detalle Completo (con conversión)
+    // --- GUARDADO COMPLETO (Moneda + Notas Limpias + Foto) ---
     fun guardarTransaccion(monedaOrigen: String, onGuardadoExitoso: () -> Unit) {
         val montoOriginal = _monto.value.toDoubleOrNull() ?: 0.0
 
@@ -257,6 +265,7 @@ class AgregarViewModel @Inject constructor(
                 // 4. Generamos Nota Completa combinando ambas (para el diálogo de detalles)
                 val notaCompletaFinal = notaUsuario + detalleConversion
 
+                // 5. Creamos la entidad incluyendo la FOTO
                 val t = TransaccionEntity(
                     id = if (currentId == -1) 0 else currentId,
                     monto = montoFinal,
@@ -265,7 +274,8 @@ class AgregarViewModel @Inject constructor(
                     notaResumen = notaResumenGenerada, // Aquí va limpio
                     fecha = _fecha.value,
                     esIngreso = _esIngreso.value,
-                    cuentaId = _cuentaIdSeleccionada.value
+                    cuentaId = _cuentaIdSeleccionada.value,
+                    fotoUri = _fotoUri.value // <--- Guardamos la URI de la foto
                 )
                 repository.insertTransaccion(t)
                 limpiarFormulario()

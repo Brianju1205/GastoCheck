@@ -2,13 +2,18 @@ package com.example.gastocheck.ui.theme.screens.transferencia
 
 import android.Manifest
 import android.app.DatePickerDialog
+import android.content.pm.PackageManager
+import android.net.Uri
 import android.widget.DatePicker
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -19,7 +24,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -29,12 +37,15 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.example.gastocheck.ui.theme.components.CampoMontoOriginal
 import com.example.gastocheck.ui.theme.components.DialogoProcesando
 import com.example.gastocheck.ui.theme.screens.home.DialogoEscuchandoAnimado
 import com.example.gastocheck.ui.theme.screens.transferencia.TransferenciaViewModel.EstadoVoz
 import com.example.gastocheck.ui.theme.util.DateUtils
+import com.example.gastocheck.ui.theme.util.ImageUtils
 import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -46,9 +57,35 @@ fun RegistrarTransferenciaScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+
+    // --- VARIABLES DE ESTADO ---
+    val fotoUri by viewModel.fotoUri.collectAsState()
+    var tempPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    var showBottomSheet by remember { mutableStateOf(false) } // Control BottomSheet
+
+    // 1. Permiso Voz
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
         if (isGranted) viewModel.iniciarEscuchaInteligente()
         else Toast.makeText(context, "Se requiere permiso para usar voz", Toast.LENGTH_SHORT).show()
+    }
+
+    // 2. Launchers Cámara y Galería
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        if (success && tempPhotoUri != null) {
+            viewModel.onFotoCapturada(tempPhotoUri.toString())
+        }
+    }
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+        if (isGranted) {
+            val uri = ImageUtils.crearUriParaFoto(context)
+            tempPhotoUri = uri
+            cameraLauncher.launch(uri)
+        } else {
+            Toast.makeText(context, "Se requiere permiso para tomar fotos", Toast.LENGTH_SHORT).show()
+        }
+    }
+    val photoPickerLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) viewModel.onFotoCapturada(uri.toString())
     }
 
     LaunchedEffect(Unit) { viewModel.uiEvent.collect { mensaje -> Toast.makeText(context, mensaje, Toast.LENGTH_SHORT).show() } }
@@ -103,7 +140,7 @@ fun RegistrarTransferenciaScreen(
     }
 
     Scaffold(
-        modifier = Modifier.imePadding(), // <--- 1. Ajuste teclado
+        modifier = Modifier.imePadding(),
         containerColor = backgroundColor,
         topBar = {
             CenterAlignedTopAppBar(
@@ -117,7 +154,7 @@ fun RegistrarTransferenciaScreen(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState()) // <--- 2. Scroll habilitado
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -151,6 +188,7 @@ fun RegistrarTransferenciaScreen(
 
             Card(colors = CardDefaults.cardColors(containerColor = surfaceVariantColor), shape = RoundedCornerShape(12.dp)) {
                 Column {
+                    // CAMPO NOTA
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -181,6 +219,40 @@ fun RegistrarTransferenciaScreen(
                         }
                     }
                     Divider(color = backgroundColor, thickness = 1.dp)
+
+                    // --- CAMPO FOTO (BOTÓN ADJUNTAR) ---
+                    if (fotoUri == null) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showBottomSheet = true } // CLICK ABRE MENU
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.AttachFile, null, tint = primaryColor)
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Text("Adjuntar comprobante", color = onSurfaceVariantColor)
+                        }
+                    } else {
+                        Box(modifier = Modifier.fillMaxWidth().height(200.dp)) {
+                            AsyncImage(
+                                model = fotoUri,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                            IconButton(
+                                onClick = { viewModel.onEliminarFoto() },
+                                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).background(Color.Black.copy(alpha=0.5f), CircleShape)
+                            ) {
+                                Icon(Icons.Default.Close, null, tint = Color.White)
+                            }
+                        }
+                    }
+
+                    Divider(color = backgroundColor, thickness = 1.dp)
+
+                    // CAMPO FECHA
                     Row(modifier = Modifier.fillMaxWidth().clickable { datePickerDialog.show() }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.CalendarToday, null, tint = primaryColor)
                         Spacer(modifier = Modifier.width(16.dp))
@@ -190,7 +262,6 @@ fun RegistrarTransferenciaScreen(
                 }
             }
 
-            // Cambiamos Spacer flexible por fijo
             Spacer(modifier = Modifier.height(32.dp))
 
             Button(
@@ -203,6 +274,67 @@ fun RegistrarTransferenciaScreen(
             }
 
             Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // --- BOTTOM SHEET TRANSFERENCIA ---
+        if (showBottomSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showBottomSheet = false },
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                Column(modifier = Modifier.padding(bottom = 32.dp)) {
+                    Text(
+                        "Adjuntar comprobante",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(16.dp).align(Alignment.CenterHorizontally)
+                    )
+
+                    // 1. SUBIR ARCHIVO
+                    ListItem(
+                        headlineContent = { Text("Subir archivo") },
+                        leadingContent = { Icon(Icons.Default.UploadFile, null, tint = MaterialTheme.colorScheme.primary) },
+                        modifier = Modifier.clickable {
+                            showBottomSheet = false
+                            photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        }
+                    )
+
+                    // 2. TOMAR FOTO
+                    ListItem(
+                        headlineContent = { Text("Tomar foto") },
+                        leadingContent = { Icon(Icons.Default.CameraAlt, null, tint = MaterialTheme.colorScheme.primary) },
+                        modifier = Modifier.clickable {
+                            showBottomSheet = false
+                            val permission = Manifest.permission.CAMERA
+                            if (ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED) {
+                                val uri = ImageUtils.crearUriParaFoto(context)
+                                tempPhotoUri = uri
+                                cameraLauncher.launch(uri)
+                            } else {
+                                cameraPermissionLauncher.launch(permission)
+                            }
+                        }
+                    )
+
+                    // 3. ESCANEAR (Premium)
+                    ListItem(
+                        headlineContent = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Escanear recibo")
+                                Spacer(Modifier.width(8.dp))
+                                Surface(color = Color(0xFFFFD700), shape = RoundedCornerShape(4.dp)) {
+                                    Text("PRO", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.Black, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
+                                }
+                            }
+                        },
+                        leadingContent = { Icon(Icons.Default.DocumentScanner, null, tint = Color.Gray) },
+                        modifier = Modifier.clickable {
+                            Toast.makeText(context, "Función Premium próximamente", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                }
+            }
         }
     }
 }

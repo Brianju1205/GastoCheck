@@ -28,7 +28,6 @@ class TransaccionRepositoryImpl @Inject constructor(
     override suspend fun getTransaccionById(id: Int) = transaccionDao.getTransaccionById(id)
     override suspend fun getCuentaById(id: Int) = cuentaDao.getCuentaById(id)
 
-    // Asegúrate de que tu DAO tenga este método o usa la lógica de búsqueda manual si no
     override suspend fun getTransaccionPareja(transaccion: TransaccionEntity) =
         transaccionDao.getTransaccionPareja(transaccion.fecha, transaccion.monto, transaccion.id)
 
@@ -64,14 +63,14 @@ class TransaccionRepositoryImpl @Inject constructor(
         }
     }
 
-    // --- CORRECCIÓN LÓGICA DE TRANSFERENCIA ---
-    // --- CORRECCIÓN: Resumen Limpio vs Detalle Completo ---
+    // --- LÓGICA DE TRANSFERENCIA (Con Foto y Notas Limpias) ---
     override suspend fun realizarTransferencia(
         origenId: Int,
         destinoId: Int,
         monto: Double,
         notaUsuario: String,
         detalleTecnico: String?,
+        fotoUri: String?, // <--- Recibido
         fecha: Date
     ) {
         db.withTransaction {
@@ -80,12 +79,11 @@ class TransaccionRepositoryImpl @Inject constructor(
 
             if (cuentaOrigen != null && cuentaDestino != null) {
 
-                // 1. Textos Base (Lo que saldrá en la lista)
+                // 1. Textos Base (Lo que saldrá en la lista del Home)
                 val baseSalida = "Transferencia a ${cuentaDestino.nombre}"
                 val baseEntrada = "Recibido de ${cuentaOrigen.nombre}"
 
                 // 2. Textos Completos (Lo que saldrá en detalles + conversión)
-                // Si hay nota de usuario, agregamos un punto. Si no, queda limpio.
                 val textoNotaSalida = if (notaUsuario.isNotBlank()) "$baseSalida. $notaUsuario" else baseSalida
                 val textoNotaEntrada = if (notaUsuario.isNotBlank()) "$baseEntrada. $notaUsuario" else baseEntrada
 
@@ -93,31 +91,34 @@ class TransaccionRepositoryImpl @Inject constructor(
                 val notaCompletaSalida = if (detalleTecnico != null) "$textoNotaSalida\n$detalleTecnico" else textoNotaSalida
                 val notaCompletaEntrada = if (detalleTecnico != null) "$textoNotaEntrada\n$detalleTecnico" else textoNotaEntrada
 
-                // 3. Crear Entidades
+                // 3. Crear Entidades (UNIFICADO AQUÍ)
                 val salida = TransaccionEntity(
                     monto = monto,
                     categoria = "Transferencia",
-                    notaCompleta = notaCompletaSalida,   // Tiene TODO (para ver en detalles)
-                    notaResumen = baseSalida,            // LIMPIO (para ver en lista "Home")
+                    notaCompleta = notaCompletaSalida,   // Tiene todo (para ver en detalles)
+                    notaResumen = baseSalida,            // Limpio (para ver en lista "Home")
                     fecha = fecha,
                     esIngreso = false,
-                    cuentaId = origenId
+                    cuentaId = origenId,
+                    fotoUri = fotoUri // <--- Guardamos la foto
                 )
 
                 val entrada = TransaccionEntity(
                     monto = monto,
                     categoria = "Transferencia",
-                    notaCompleta = notaCompletaEntrada,  // Tiene TODO
-                    notaResumen = baseEntrada,           // LIMPIO
+                    notaCompleta = notaCompletaEntrada,
+                    notaResumen = baseEntrada,
                     fecha = fecha,
                     esIngreso = true,
-                    cuentaId = destinoId
+                    cuentaId = destinoId,
+                    fotoUri = fotoUri // <--- Copia de la foto para el destino
                 )
 
                 // 4. Guardar
                 transaccionDao.insertTransaccion(salida)
                 transaccionDao.insertTransaccion(entrada)
 
+                // 5. Actualizar saldos (Snapshots)
                 registrarSnapshot(origenId, fecha, "Transferencia Enviada")
                 registrarSnapshot(destinoId, fecha, "Transferencia Recibida")
                 registrarSnapshot(-1, fecha, "Transferencia")
