@@ -63,14 +63,14 @@ class TransaccionRepositoryImpl @Inject constructor(
         }
     }
 
-    // --- LÓGICA DE TRANSFERENCIA (Con Foto y Notas Limpias) ---
+    // --- LÓGICA DE TRANSFERENCIA (Actualizada con List<String>) ---
     override suspend fun realizarTransferencia(
         origenId: Int,
         destinoId: Int,
         monto: Double,
         notaUsuario: String,
         detalleTecnico: String?,
-        fotoUri: String?, // <--- Recibido
+        fotos: List<String>, // <--- CAMBIO: Ahora recibimos una lista
         fecha: Date
     ) {
         db.withTransaction {
@@ -100,7 +100,7 @@ class TransaccionRepositoryImpl @Inject constructor(
                     fecha = fecha,
                     esIngreso = false,
                     cuentaId = origenId,
-                    fotoUri = fotoUri // <--- Guardamos la foto
+                    fotos = fotos // <--- Guardamos la lista de fotos en la salida
                 )
 
                 val entrada = TransaccionEntity(
@@ -111,7 +111,7 @@ class TransaccionRepositoryImpl @Inject constructor(
                     fecha = fecha,
                     esIngreso = true,
                     cuentaId = destinoId,
-                    fotoUri = fotoUri // <--- Copia de la foto para el destino
+                    fotos = fotos // <--- Guardamos copia de la lista para el destino
                 )
 
                 // 4. Guardar

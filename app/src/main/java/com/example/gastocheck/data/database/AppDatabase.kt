@@ -31,7 +31,8 @@ import com.example.gastocheck.data.database.entity.VozPendienteEntity
         BalanceSnapshotEntity::class,
         AbonoEntity::class,
         SuscripcionEntity::class,
-        HistorialPagoEntity::class
+        HistorialPagoEntity::class,
+
     ],
     version = 16, // <--- Versión actualizada
     exportSchema = false

@@ -33,6 +33,6 @@ interface TransaccionRepository {
         monto: Double,
         notaUsuario: String,
         detalleTecnico: String?,
-        fotoUri: String?, // <--- Nuevo parámetro
+        fotos: List<String>, // <--- Nuevo parámetro
         fecha: Date
     )}

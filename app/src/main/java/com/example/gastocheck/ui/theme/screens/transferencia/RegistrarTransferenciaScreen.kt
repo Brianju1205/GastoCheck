@@ -12,6 +12,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,9 +36,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
@@ -46,6 +49,7 @@ import com.example.gastocheck.ui.theme.screens.home.DialogoEscuchandoAnimado
 import com.example.gastocheck.ui.theme.screens.transferencia.TransferenciaViewModel.EstadoVoz
 import com.example.gastocheck.ui.theme.util.DateUtils
 import com.example.gastocheck.ui.theme.util.ImageUtils
+import java.io.File
 import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -59,9 +63,12 @@ fun RegistrarTransferenciaScreen(
     val context = LocalContext.current
 
     // --- VARIABLES DE ESTADO ---
-    val fotoUri by viewModel.fotoUri.collectAsState()
+    // Usamos la lista de fotos del ViewModel
+    val fotos by viewModel.fotos.collectAsState()
+
     var tempPhotoUri by remember { mutableStateOf<Uri?>(null) }
-    var showBottomSheet by remember { mutableStateOf(false) } // Control BottomSheet
+    var showBottomSheet by remember { mutableStateOf(false) }
+    var fotoParaVerGrande by remember { mutableStateOf<String?>(null) } // Estado para Zoom
 
     // 1. Permiso Voz
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -220,34 +227,21 @@ fun RegistrarTransferenciaScreen(
                     }
                     Divider(color = backgroundColor, thickness = 1.dp)
 
-                    // --- CAMPO FOTO (BOTÓN ADJUNTAR) ---
-                    if (fotoUri == null) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { showBottomSheet = true } // CLICK ABRE MENU
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.AttachFile, null, tint = primaryColor)
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Text("Adjuntar comprobante", color = onSurfaceVariantColor)
-                        }
-                    } else {
-                        Box(modifier = Modifier.fillMaxWidth().height(200.dp)) {
-                            AsyncImage(
-                                model = fotoUri,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                            IconButton(
-                                onClick = { viewModel.onEliminarFoto() },
-                                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).background(Color.Black.copy(alpha=0.5f), CircleShape)
-                            ) {
-                                Icon(Icons.Default.Close, null, tint = Color.White)
-                            }
-                        }
+                    // --- SECCIÓN DE FOTOS (CARRUSEL MINIATURA) ---
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Comprobantes (${fotos.size})",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        ListaFotosMiniaturaT(
+                            fotos = fotos,
+                            onEliminar = { viewModel.eliminarFoto(it) },
+                            onVerFoto = { fotoParaVerGrande = it },
+                            onAgregarMas = { showBottomSheet = true }
+                        )
                     }
 
                     Divider(color = backgroundColor, thickness = 1.dp)
@@ -274,6 +268,11 @@ fun RegistrarTransferenciaScreen(
             }
 
             Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // --- DIÁLOGO VER FOTO GRANDE ---
+        if (fotoParaVerGrande != null) {
+            DialogoVerComprobanteT(fotoUri = fotoParaVerGrande!!, onDismiss = { fotoParaVerGrande = null })
         }
 
         // --- BOTTOM SHEET TRANSFERENCIA ---
@@ -316,23 +315,6 @@ fun RegistrarTransferenciaScreen(
                             }
                         }
                     )
-
-                    // 3. ESCANEAR (Premium)
-                    ListItem(
-                        headlineContent = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("Escanear recibo")
-                                Spacer(Modifier.width(8.dp))
-                                Surface(color = Color(0xFFFFD700), shape = RoundedCornerShape(4.dp)) {
-                                    Text("PRO", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.Black, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
-                                }
-                            }
-                        },
-                        leadingContent = { Icon(Icons.Default.DocumentScanner, null, tint = Color.Gray) },
-                        modifier = Modifier.clickable {
-                            Toast.makeText(context, "Función Premium próximamente", Toast.LENGTH_SHORT).show()
-                        }
-                    )
                 }
             }
         }
@@ -345,6 +327,100 @@ fun CuentaSelector(nombre: String, onClick: () -> Unit) {
         Row(modifier = Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Text(nombre, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             Icon(Icons.Default.UnfoldMore, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+// -------------------------------------------------------------
+// COMPONENTES AUXILIARES (Copiados para integridad)
+// -------------------------------------------------------------
+
+@Composable
+fun ListaFotosMiniaturaT(
+    fotos: List<String>,
+    onEliminar: (String) -> Unit,
+    onVerFoto: (String) -> Unit,
+    onAgregarMas: () -> Unit
+) {
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(90.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Botón agregar
+        item {
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clickable { onAgregarMas() },
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.AddAPhoto, null, tint = MaterialTheme.colorScheme.primary)
+                    Text("Adjuntar", fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
+
+        items(fotos) { rutaFoto ->
+            Box(modifier = Modifier.size(80.dp)) {
+                AsyncImage(
+                    model = File(rutaFoto),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { onVerFoto(rutaFoto) },
+                    contentScale = ContentScale.Crop
+                )
+
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
+                        .size(20.dp)
+                        .clip(CircleShape)
+                        .background(Color.Red.copy(alpha = 0.8f))
+                        .clickable { onEliminar(rutaFoto) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DialogoVerComprobanteT(fotoUri: String, onDismiss: () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+        ) {
+            AsyncImage(
+                model = File(fotoUri),
+                contentDescription = "Comprobante",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit
+            )
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp)
+                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+            ) {
+                Icon(Icons.Default.Close, null, tint = Color.White)
+            }
         }
     }
 }

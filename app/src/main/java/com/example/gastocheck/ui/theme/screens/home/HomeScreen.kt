@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -56,6 +57,7 @@ import java.util.Date
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
 import androidx.compose.ui.window.DialogProperties
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -101,6 +103,7 @@ fun HomeScreen(
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
         if (isGranted) agregarViewModel.iniciarEscuchaInteligente()
     }
+    var mostrarTodosMovimientos by remember { mutableStateOf(false) }
 
     LaunchedEffect(estadoVoz) {
         if (estadoVoz is EstadoVoz.Exito) {
@@ -285,32 +288,87 @@ fun HomeScreen(
 
                         item { Text("Últimos Movimientos", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp)) }
 
-                        val ultimos = listaTransacciones.filter { !(it.categoria == "Transferencia" && it.esIngreso) }.take(6)
+                        val todosLosMovimientos = listaTransacciones
+                            .filter { !(it.categoria == "Transferencia" && it.esIngreso) }
+                            .sortedByDescending { it.fecha }
 
-                        items(ultimos) { t ->
-                            val cuenta = cuentas.find { it.id == t.cuentaId }
-                            val nombreCuenta = cuenta?.nombre ?: "Efectivo"
+                        // 2. Decidimos cuántos mostrar
+                        val movimientosVisibles = if (mostrarTodosMovimientos) {
+                            todosLosMovimientos
+                        } else {
+                            todosLosMovimientos.take(10) // Límite inicial de 10
+                        }
 
-                            if (t.categoria == "Transferencia") {
-                                ItemTransferencia(
-                                    transaccion = t,
-                                    cuentaOrigen = cuenta,
-                                    onItemClick = { transaccionSeleccionada = t; mostrarDetalle = true },
-                                    onEdit = { onNavegarTransferencia(t.id, null) },
-                                    onDelete = { transaccionSeleccionada = t; mostrarConfirmacionBorrar = true }
+                        // 3. Agrupamos por fecha (Lógica clave)
+                        val agrupadoInicio = movimientosVisibles.groupBy { DateUtils.formatearFechaAmigable(it.fecha) }
+
+                        // 4. Renderizamos los grupos
+                        agrupadoInicio.forEach { (fechaStr, movimientos) ->
+                            // Cabecera de fecha
+                            item {
+                                Text(
+                                    text = fechaStr,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier
+                                        .padding(vertical = 8.dp)
+                                        .fillMaxWidth(),
+                                    textAlign = TextAlign.Center
                                 )
-                            } else {
-                                ItemTransaccionModerno(
-                                    transaccion = t,
-                                    cuentaOrigen = cuenta,
-                                    onEdit = { onNavegarEditar(t.id) },
-                                    onDelete = { transaccionSeleccionada = t; mostrarConfirmacionBorrar = true },
-                                    onItemClick = { transaccionSeleccionada = t; mostrarDetalle = true }
-                                )
+                            }
+
+                            // Items del grupo
+                            items(movimientos) { t ->
+                                val cuenta = cuentas.find { it.id == t.cuentaId }
+
+                                if (t.categoria == "Transferencia") {
+                                    ItemTransferencia(
+                                        transaccion = t,
+                                        cuentaOrigen = cuenta,
+                                        onItemClick = { transaccionSeleccionada = t; mostrarDetalle = true },
+                                        onEdit = { onNavegarTransferencia(t.id, null) },
+                                        onDelete = { transaccionSeleccionada = t; mostrarConfirmacionBorrar = true }
+                                    )
+                                } else {
+                                    ItemTransaccionModerno(
+                                        transaccion = t,
+                                        cuentaOrigen = cuenta,
+                                        onEdit = { onNavegarEditar(t.id) },
+                                        onDelete = { transaccionSeleccionada = t; mostrarConfirmacionBorrar = true },
+                                        onItemClick = { transaccionSeleccionada = t; mostrarDetalle = true }
+                                    )
+                                }
                             }
                         }
 
-                        if (ultimos.isEmpty()) item { Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { Text("No hay movimientos recientes", color = Color.Gray) } }
+                        // 5. Botón "Mostrar Todos" / "Mostrar Menos"
+                        if (todosLosMovimientos.size > 10) {
+                            item {
+                                Box(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), contentAlignment = Alignment.Center) {
+                                    OutlinedButton(
+                                        onClick = { mostrarTodosMovimientos = !mostrarTodosMovimientos },
+                                        shape = RoundedCornerShape(50),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                                    ) {
+                                        Text(if (mostrarTodosMovimientos) "Mostrar menos" else "Ver todos los movimientos")
+                                        Spacer(Modifier.width(8.dp))
+                                        Icon(
+                                            imageVector = if (mostrarTodosMovimientos) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (todosLosMovimientos.isEmpty()) {
+                            item {
+                                Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                                    Text("No hay movimientos recientes", color = Color.Gray)
+                                }
+                            }
+                        }
                     }
 
                     1, 2, 3 -> { // GASTOS, INGRESOS, TRANSFERENCIAS
@@ -409,9 +467,9 @@ fun DetalleTransaccionDialog(
     onEdit: () -> Unit
 ) {
     val isTransfer = transaccion.categoria == "Transferencia"
-    var mostrarFoto by remember { mutableStateOf(false) } // Estado para abrir la foto
+    var fotoSeleccionada by remember { mutableStateOf<String?>(null) }
 
-    // Lógica de Icono y Color
+    // Lógica de Icono y Color (Igual que antes)
     val (icono, color) = if (isTransfer && cuenta != null) {
         val c = try { Color(android.graphics.Color.parseColor(cuenta.colorHex)) } catch(e:Exception){ MaterialTheme.colorScheme.primary }
         Pair(IconoUtils.getIconoByName(cuenta.icono), c)
@@ -421,68 +479,127 @@ fun DetalleTransaccionDialog(
         Pair(IconoUtils.getIconoByName(transaccion.categoria), finalColor)
     }
 
-    // --- DIÁLOGO DE LA FOTO ---
-    if (mostrarFoto && !transaccion.fotoUri.isNullOrEmpty()) {
-        DialogoVerComprobante(fotoUri = transaccion.fotoUri, onDismiss = { mostrarFoto = false })
+    // Diálogo de Zoom (Igual que antes)
+    if (fotoSeleccionada != null) {
+        DialogoVerComprobante(fotoUri = fotoSeleccionada!!, onDismiss = { fotoSeleccionada = null })
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
         icon = { Icon(icono, null, tint = color, modifier = Modifier.size(48.dp)) },
-        title = { Text(transaccion.categoria) },
+        // Título centrado explícitamente
+        title = {
+            Text(
+                text = transaccion.categoria,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
         text = {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) { // Centrado
-                Text(CurrencyUtils.formatCurrency(transaccion.monto), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            // Contenido centrado (Igual que la última versión válida)
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    CurrencyUtils.formatCurrency(transaccion.monto),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
 
                 Spacer(Modifier.height(8.dp))
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                    Icon(Icons.Default.AccountBalanceWallet, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(4.dp))
                     Text(cuenta?.nombre ?: "Cuenta", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                 }
 
                 Spacer(Modifier.height(16.dp))
 
-                // Nota
                 if (transaccion.notaCompleta.isNotEmpty()) {
-                    Text(transaccion.notaCompleta, textAlign = TextAlign.Center)
-                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = transaccion.notaCompleta,
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
                 }
 
-                Text(DateUtils.formatearFechaAmigable(transaccion.fecha), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // Fecha y Hora
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = DateUtils.formatearFechaAmigable(transaccion.fecha),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = DateUtils.formatearHora(transaccion.fecha),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
 
-                // --- ICONO DE COMPROBANTE DISCRETO ---
-                // Solo aparece si hay fotoUri
-                if (!transaccion.fotoUri.isNullOrEmpty()) {
-                    Spacer(Modifier.height(12.dp))
+                // Comprobantes
+                if (transaccion.fotos.isNotEmpty()) {
+                    Spacer(Modifier.height(16.dp))
+                    Text("Comprobantes", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
 
-                    FilledTonalIconButton(
-                        onClick = { mostrarFoto = true },
-                        modifier = Modifier.size(40.dp) // Tamaño discreto
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                        modifier = Modifier.padding(top = 8.dp).fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Icono de documento/archivo
-                        Icon(
-                            imageVector = Icons.Default.Description, // O "Image" si prefieres
-                            contentDescription = "Ver comprobante",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
+                        items(transaccion.fotos) { ruta ->
+                            AsyncImage(
+                                model = File(ruta),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(60.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { fotoSeleccionada = ruta },
+                                contentScale = ContentScale.Crop
+                            )
+                        }
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onEdit) { Text("Editar") } },
-        dismissButton = {
-            Row {
-                TextButton(onClick = onDelete) { Text("Eliminar", color = MaterialTheme.colorScheme.error) }
-                TextButton(onClick = onDismiss) { Text("Cerrar") }
+        // --- AQUÍ ESTÁ EL CAMBIO PARA CENTRAR LOS BOTONES ---
+        confirmButton = {
+            // Usamos una Row que llene el ancho y centre su contenido horizontalmente
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center, // <--- CLAVE PARA CENTRAR
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Ordenamos los botones visualmente: Eliminar - Cerrar - Editar
+
+                TextButton(onClick = onDelete) {
+                    Text("Eliminar", color = MaterialTheme.colorScheme.error)
+                }
+
+                Spacer(Modifier.width(4.dp)) // Pequeño espacio opcional
+
+                TextButton(onClick = onDismiss) {
+                    Text("Cerrar")
+                }
+
+                Spacer(Modifier.width(4.dp)) // Pequeño espacio opcional
+
+                TextButton(onClick = onEdit) {
+                    // Resaltamos un poco "Editar" como acción principal
+                    Text("Editar", fontWeight = FontWeight.W600)
+                }
             }
-        }
+        },
+        // Dejamos el dismissButton vacío porque ya pusimos todo en confirmButton
+        dismissButton = {}
     )
 }
-
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ItemTransaccionModerno(

@@ -1,15 +1,17 @@
 package com.example.gastocheck.ui.theme.screens.agregar
 
 import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gastocheck.data.database.entity.CuentaEntity
 import com.example.gastocheck.data.database.entity.TransaccionEntity
 import com.example.gastocheck.data.gemini.GeminiRepository
+import com.example.gastocheck.data.ocr.OcrService
 import com.example.gastocheck.data.repository.TransaccionRepository
-import com.example.gastocheck.ui.theme.util.CategoriaUtils
 import com.example.gastocheck.ui.theme.util.CurrencyUtils
+import com.example.gastocheck.ui.theme.util.ImageUtils
 import com.example.gastocheck.ui.theme.util.NotaUtils
 import com.example.gastocheck.ui.theme.util.VoiceRecognizer
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -19,12 +21,12 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.Date
 import javax.inject.Inject
-import kotlin.math.max
 
 @HiltViewModel
 class AgregarViewModel @Inject constructor(
     private val repository: TransaccionRepository,
     private val geminiRepository: GeminiRepository,
+    private val ocrService: OcrService,
     @ApplicationContext private val context: Context,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -48,9 +50,9 @@ class AgregarViewModel @Inject constructor(
     private val _esMeta = MutableStateFlow(false)
     val esMeta = _esMeta.asStateFlow()
 
-    // --- NUEVO: ESTADO FOTO ---
-    private val _fotoUri = MutableStateFlow<String?>(null)
-    val fotoUri = _fotoUri.asStateFlow()
+    // --- NUEVO: ESTADO FOTOS (LISTA) ---
+    private val _fotos = MutableStateFlow<List<String>>(emptyList())
+    val fotos = _fotos.asStateFlow()
 
     // --- ESTADOS DE CUENTAS ---
     val cuentas: StateFlow<List<CuentaEntity>> = repository.getCuentas()
@@ -59,7 +61,7 @@ class AgregarViewModel @Inject constructor(
     private val _cuentaIdSeleccionada = MutableStateFlow(1)
     val cuentaIdSeleccionada = _cuentaIdSeleccionada.asStateFlow()
 
-    // --- ESTADOS VOZ ---
+    // --- ESTADOS VOZ / PROCESAMIENTO ---
     private val _estadoVoz = MutableStateFlow<EstadoVoz>(EstadoVoz.Inactivo)
     val estadoVoz = _estadoVoz.asStateFlow()
 
@@ -71,7 +73,7 @@ class AgregarViewModel @Inject constructor(
     sealed class EstadoVoz {
         object Inactivo : EstadoVoz()
         object Escuchando : EstadoVoz()
-        object ProcesandoIA : EstadoVoz()
+        object ProcesandoIA : EstadoVoz() // Usado también para "Analizando Recibo"
         data class Exito(val esIngreso: Boolean) : EstadoVoz()
         object Error : EstadoVoz()
     }
@@ -98,7 +100,7 @@ class AgregarViewModel @Inject constructor(
         _categoria.value = "Otros"
         _fecha.value = Date()
         _esMeta.value = false
-        _fotoUri.value = null // Limpiamos la foto
+        _fotos.value = emptyList() // Limpiamos la lista de fotos
     }
 
     private fun cargarTransaccion(id: Int) {
@@ -116,7 +118,9 @@ class AgregarViewModel @Inject constructor(
                 _categoria.value = it.categoria
                 _cuentaIdSeleccionada.value = it.cuentaId
                 _fecha.value = it.fecha
-                _fotoUri.value = it.fotoUri // Recuperamos la foto si existe
+
+                // Cargar lista de fotos
+                _fotos.value = it.fotos
             }
         }
     }
@@ -128,9 +132,28 @@ class AgregarViewModel @Inject constructor(
     fun onFechaChange(n: Date) { _fecha.value = n }
     fun reiniciarEstadoVoz() { _estadoVoz.value = EstadoVoz.Inactivo }
 
-    // Setters de Foto
-    fun onFotoCapturada(uri: String) { _fotoUri.value = uri }
-    fun onEliminarFoto() { _fotoUri.value = null }
+    // --- GESTIÓN DE FOTOS ---
+    fun onFotoCapturada(uriString: String) {
+        viewModelScope.launch {
+            val uri = Uri.parse(uriString)
+            // 1. COPIAMOS la imagen al almacenamiento interno (para que sea persistente)
+            val pathPermanente = ImageUtils.guardarImagenEnInterno(context, uri)
+
+            if (pathPermanente != null) {
+                // 2. AÑADIMOS a la lista existente
+                val listaActual = _fotos.value.toMutableList()
+                listaActual.add(pathPermanente)
+                _fotos.value = listaActual
+            }
+        }
+    }
+
+    fun eliminarFoto(path: String) {
+        val listaActual = _fotos.value.toMutableList()
+        listaActual.remove(path)
+        _fotos.value = listaActual
+        // Opcional: Podrías borrar el archivo físico aquí si quieres ahorrar espacio inmediatamente
+    }
 
     fun onDescripcionChange(nuevoTexto: String) {
         _descripcion.value = nuevoTexto
@@ -145,6 +168,67 @@ class AgregarViewModel @Inject constructor(
             }
             if (cuentaDetectada != null && cuentaDetectada.id != _cuentaIdSeleccionada.value) {
                 _cuentaIdSeleccionada.value = cuentaDetectada.id
+            }
+        }
+    }
+
+    // --- LÓGICA ESCANEO DE RECIBOS (OCR + IA + SUMA) ---
+    fun escanearRecibo(uri: Uri) {
+        viewModelScope.launch {
+            // 1. Mostrar Loading
+            _estadoVoz.value = EstadoVoz.ProcesandoIA
+
+            // 2. Guardar la foto del recibo
+            onFotoCapturada(uri.toString())
+
+            try {
+                // 3. Extraer texto con ML Kit
+                val textoCrudo = ocrService.procesarImagen(uri)
+
+                if (textoCrudo.isNotBlank()) {
+                    // 4. Analizar con Gemini/Groq
+                    val datos = geminiRepository.analizarTextoRecibo(textoCrudo)
+
+                    if (datos != null) {
+                        // 5. LÓGICA DE SUMA INTELIGENTE
+                        val montoActual = _monto.value.toDoubleOrNull() ?: 0.0
+                        val nuevoMonto = montoActual + datos.monto
+                        _monto.value = nuevoMonto.toString()
+
+                        // Categoría: Solo actualizamos si no se ha elegido una específica aún
+                        if (_categoria.value == "Otros") {
+                            _categoria.value = datos.categoria
+                        }
+
+                        // Nota: Acumulamos la descripción de productos
+                        val notaActual = _descripcion.value
+                        val nuevaNota = if (notaActual.isBlank()) datos.descripcion else "$notaActual + ${datos.descripcion}"
+                        _descripcion.value = nuevaNota
+
+                        // Fecha: Priorizamos la fecha del recibo si es coherente
+                        if (datos.fecha != null) {
+                            _fecha.value = datos.fecha
+                        }
+
+                        // --- CORRECCIÓN AQUÍ ---
+                        // ANTES: _estadoVoz.value = EstadoVoz.Exito(_esIngreso.value)
+                        // ESTO CAUSABA LA DOBLE PANTALLA
+
+                        // AHORA:
+                        _estadoVoz.value = EstadoVoz.Inactivo
+                    } else {
+                        // Falló la IA, pero dejamos la foto y ponemos el texto crudo en la nota
+                        if (_descripcion.value.isBlank()) {
+                            _descripcion.value = "Texto detectado: ${textoCrudo.take(100)}..."
+                        }
+                        _estadoVoz.value = EstadoVoz.Error
+                    }
+                } else {
+                    _estadoVoz.value = EstadoVoz.Error // No se detectó texto en la imagen
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _estadoVoz.value = EstadoVoz.Error
             }
         }
     }
@@ -236,7 +320,7 @@ class AgregarViewModel @Inject constructor(
         return mejorMonto
     }
 
-    // --- GUARDADO COMPLETO (Moneda + Notas Limpias + Foto) ---
+    // --- GUARDADO COMPLETO ---
     fun guardarTransaccion(monedaOrigen: String, onGuardadoExitoso: () -> Unit) {
         val montoOriginal = _monto.value.toDoubleOrNull() ?: 0.0
 
@@ -251,31 +335,28 @@ class AgregarViewModel @Inject constructor(
                 var detalleConversion = ""
                 if (monedaOrigen != "MXN") {
                     montoFinal = CurrencyUtils.convertirAMxn(montoOriginal, monedaOrigen)
-
                     val montoOrigStr = CurrencyUtils.formatCurrency(montoOriginal).replace("$", "")
                     val montoFinalStr = CurrencyUtils.formatCurrency(montoFinal)
-
-                    // Preparamos el texto que SOLO irá a detalles
                     detalleConversion = "\n(Conv: $montoOrigStr $monedaOrigen ≈ $montoFinalStr MXN)"
                 }
 
-                // 3. Generamos Resumen SOLO con la nota del usuario (así la lista se ve limpia)
+                // 3. Generamos Resumen
                 val notaResumenGenerada = NotaUtils.generarResumen(notaUsuario, _categoria.value)
 
-                // 4. Generamos Nota Completa combinando ambas (para el diálogo de detalles)
+                // 4. Generamos Nota Completa
                 val notaCompletaFinal = notaUsuario + detalleConversion
 
-                // 5. Creamos la entidad incluyendo la FOTO
+                // 5. Creamos la entidad incluyendo la LISTA DE FOTOS
                 val t = TransaccionEntity(
                     id = if (currentId == -1) 0 else currentId,
                     monto = montoFinal,
                     categoria = _categoria.value,
-                    notaCompleta = notaCompletaFinal, // Aquí va el detalle técnico
-                    notaResumen = notaResumenGenerada, // Aquí va limpio
+                    notaCompleta = notaCompletaFinal,
+                    notaResumen = notaResumenGenerada,
                     fecha = _fecha.value,
                     esIngreso = _esIngreso.value,
                     cuentaId = _cuentaIdSeleccionada.value,
-                    fotoUri = _fotoUri.value // <--- Guardamos la URI de la foto
+                    fotos = _fotos.value // <--- Guardamos la lista de rutas
                 )
                 repository.insertTransaccion(t)
                 limpiarFormulario()

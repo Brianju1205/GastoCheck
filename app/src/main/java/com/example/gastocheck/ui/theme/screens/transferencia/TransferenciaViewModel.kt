@@ -1,12 +1,14 @@
 package com.example.gastocheck.ui.theme.screens.transferencia
 
 import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gastocheck.data.database.entity.CuentaEntity
 import com.example.gastocheck.data.gemini.GeminiRepository
 import com.example.gastocheck.data.repository.TransaccionRepository
 import com.example.gastocheck.ui.theme.util.CurrencyUtils
+import com.example.gastocheck.ui.theme.util.ImageUtils
 import com.example.gastocheck.ui.theme.util.VoiceRecognizer
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -42,9 +44,9 @@ class TransferenciaViewModel @Inject constructor(
     private val _fecha = MutableStateFlow(Date())
     val fecha = _fecha.asStateFlow()
 
-    // --- NUEVO: ESTADO FOTO ---
-    private val _fotoUri = MutableStateFlow<String?>(null)
-    val fotoUri = _fotoUri.asStateFlow()
+    // --- NUEVO: ESTADO FOTOS (LISTA) ---
+    private val _fotos = MutableStateFlow<List<String>>(emptyList())
+    val fotos = _fotos.asStateFlow()
 
     private val _uiEvent = Channel<String>()
     val uiEvent = _uiEvent.receiveAsFlow()
@@ -69,9 +71,27 @@ class TransferenciaViewModel @Inject constructor(
     fun onNotaChange(v: String) { _nota.value = v }
     fun onFechaChange(d: Date) { _fecha.value = d }
 
-    // Setters de Foto
-    fun onFotoCapturada(uri: String) { _fotoUri.value = uri }
-    fun onEliminarFoto() { _fotoUri.value = null }
+    // --- GESTIÓN DE FOTOS ---
+    fun onFotoCapturada(uriString: String) {
+        viewModelScope.launch {
+            val uri = Uri.parse(uriString)
+            // 1. COPIAMOS la imagen al almacenamiento interno (para que sea persistente)
+            val pathPermanente = ImageUtils.guardarImagenEnInterno(context, uri)
+
+            if (pathPermanente != null) {
+                // 2. AÑADIMOS a la lista existente
+                val listaActual = _fotos.value.toMutableList()
+                listaActual.add(pathPermanente)
+                _fotos.value = listaActual
+            }
+        }
+    }
+
+    fun eliminarFoto(path: String) {
+        val listaActual = _fotos.value.toMutableList()
+        listaActual.remove(path)
+        _fotos.value = listaActual
+    }
 
     fun reiniciarEstadoVoz() { _estadoVoz.value = EstadoVoz.Inactivo }
 
@@ -116,8 +136,8 @@ class TransferenciaViewModel @Inject constructor(
 
                     _nota.value = notaLimpia
 
-                    // Cargar Foto si existe
-                    _fotoUri.value = t.fotoUri
+                    // Cargar Lista de Fotos
+                    _fotos.value = t.fotos
                 }
             }
         } else {
@@ -132,7 +152,7 @@ class TransferenciaViewModel @Inject constructor(
         _fecha.value = Date()
         _origenId.value = -1
         _destinoId.value = -1
-        _fotoUri.value = null // Limpiar foto
+        _fotos.value = emptyList() // Limpiar lista
     }
 
     // --- LÓGICA DE VOZ (IA) ---
@@ -257,7 +277,7 @@ class TransferenciaViewModel @Inject constructor(
         }
     }
 
-    // --- GUARDAR (CON CONVERSIÓN Y FOTO) ---
+    // --- GUARDAR (CON CONVERSIÓN Y FOTOS) ---
     fun realizarTransferencia(monedaOrigen: String, onSuccess: () -> Unit) {
         val montoVal = _monto.value.toDoubleOrNull() ?: 0.0
         val origen = _origenId.value
@@ -288,14 +308,14 @@ class TransferenciaViewModel @Inject constructor(
                     detalleTecnico = "(Conv: $montoOrigStr $monedaOrigen ≈ $montoFinalStr MXN)"
                 }
 
-                // --- GUARDADO CON FOTO ---
+                // --- GUARDADO CON LISTA DE FOTOS ---
                 repository.realizarTransferencia(
                     origenId = origen,
                     destinoId = destino,
                     monto = montoFinal,
                     notaUsuario = notaUsuario,
                     detalleTecnico = detalleTecnico,
-                    fotoUri = _fotoUri.value, // <--- Se envía la foto
+                    fotos = _fotos.value, // <--- Enviamos la lista
                     fecha = _fecha.value
                 )
                 onSuccess()

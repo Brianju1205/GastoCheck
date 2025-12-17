@@ -1,5 +1,5 @@
 package com.example.gastocheck.data.gemini
-
+/*
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.POST
@@ -13,4 +13,4 @@ interface GeminiApi {
         @Query("key") apiKey: String,
         @Body request: GeminiRequest
     ): Response<GeminiResponse>
-}
+}*/

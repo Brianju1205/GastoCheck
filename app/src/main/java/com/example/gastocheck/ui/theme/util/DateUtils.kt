@@ -17,6 +17,10 @@ object DateUtils {
             else -> SimpleDateFormat("dd 'de' MMM", Locale.getDefault()).format(fecha)
         }
     }
+    fun formatearHora(date: Date): String {
+        val format = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault())
+        return format.format(date)
+    }
 
     private fun esMismoDia(cal1: Calendar, cal2: Calendar): Boolean {
         return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&

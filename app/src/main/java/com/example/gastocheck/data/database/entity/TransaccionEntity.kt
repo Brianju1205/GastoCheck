@@ -28,5 +28,5 @@ data class TransaccionEntity(
     val fecha: Date,
     val esIngreso: Boolean,
     val cuentaId: Int,
-    val fotoUri: String? = null
+    val fotos: List<String> = emptyList()
 )

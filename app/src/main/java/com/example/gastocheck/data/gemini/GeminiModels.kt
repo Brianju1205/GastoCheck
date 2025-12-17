@@ -35,7 +35,7 @@ data class Candidate(
 // ===============================
 // MODELO EXISTENTE: TRANSACCIÓN
 // ===============================
-data class TransaccionInterpretada(
+/*data class TransaccionInterpretada(
     val tipo: String,
     val monto: Double,
     val categoria: String,
@@ -43,11 +43,11 @@ data class TransaccionInterpretada(
     val cuenta_origen: String = "Efectivo",
     val cuenta_destino: String? = null
 )
-
+*/
 // ===============================
 // MODELO NUEVO: ANÁLISIS FINANCIERO
 // ===============================
-data class AnalisisFinancieroResponse(
+/*data class AnalisisFinancieroResponse(
     @SerializedName("proyeccion_fin_mes")
     val proyeccionFinMes: Double,
 
@@ -62,4 +62,4 @@ data class AnalisisFinancieroResponse(
 
     @SerializedName("recomendacion_accionable")
     val recomendacion: String
-)
+)*/

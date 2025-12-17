@@ -74,6 +74,9 @@ dependencies {
     implementation(libs.retrofit)
     implementation(libs.retrofit.gson)
     implementation("io.coil-kt:coil-compose:2.5.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.0")
+
     // Fix para conflictos de anotaciones
     implementation("org.jetbrains:annotations:23.0.0")
     modules {
