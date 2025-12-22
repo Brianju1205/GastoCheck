@@ -1,5 +1,7 @@
 package com.example.gastocheck.ui.theme.navigation
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -25,6 +27,7 @@ import com.example.gastocheck.ui.theme.screens.ajustes.AjustesScreen
 import com.example.gastocheck.ui.theme.screens.estadisticas.EstadisticasScreen // <--- IMPORTANTE
 import com.example.gastocheck.ui.theme.screens.transferencia.RegistrarTransferenciaScreen
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
@@ -159,6 +162,8 @@ fun AppNavigation() {
             // --- CUENTAS ---
             composable("cuentas_lista") {
                 Box(modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding())) {
+
+                    // CORRECCIÓN: Llamamos a CuentasListaScreen
                     CuentasListaScreen(
                         onNavegarDetalle = { navController.navigate("detalle_cuenta/$it") },
                         onNavegarCrear = { navController.navigate("crear_cuenta?id=-1") }

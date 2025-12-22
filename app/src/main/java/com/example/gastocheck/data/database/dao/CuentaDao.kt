@@ -29,7 +29,7 @@ interface CuentaDao {
     @Query("SELECT SUM(saldoInicial) FROM cuentas")
     suspend fun obtenerSaldoTotalGlobal(): Double?
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertCuenta(cuenta: CuentaEntity)
+    suspend fun insertCuenta(cuenta: CuentaEntity): Long
 
     @Query("SELECT COALESCE(SUM(saldoInicial), 0.0) FROM cuentas")
     suspend fun obtenerSumaSaldosIniciales(): Double?

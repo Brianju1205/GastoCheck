@@ -1,9 +1,11 @@
 package com.example.gastocheck
 
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -15,6 +17,7 @@ import com.example.gastocheck.ui.theme.navigation.AppNavigation // <--- Importan
 import com.example.gastocheck.ui.theme.GastoCheckTheme
 @AndroidEntryPoint // <--- ¡ESTA ETIQUETA ES LA MÁS IMPORTANTE PARA HILT!
 class MainActivity : ComponentActivity() {
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge() // Habilita el diseño de borde a borde (barra de estado transparente)

@@ -1,29 +1,21 @@
 package com.example.gastocheck.ui.theme.screens.cuentas
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.example.gastocheck.data.database.entity.CuentaEntity
-import com.example.gastocheck.data.database.entity.TransaccionEntity
-import com.example.gastocheck.ui.theme.screens.home.DetalleTransaccionDialog
-import com.example.gastocheck.ui.theme.util.CategoriaUtils
+import com.example.gastocheck.ui.theme.screens.home.CuentaUiState
 import com.example.gastocheck.ui.theme.util.CurrencyUtils
 import com.example.gastocheck.ui.theme.util.IconoUtils
 
@@ -31,176 +23,94 @@ import com.example.gastocheck.ui.theme.util.IconoUtils
 @Composable
 fun DetalleCuentaScreen(
     accountId: Int,
-    viewModel: DetalleCuentaViewModel = hiltViewModel(),
     onBack: () -> Unit,
     onEditar: (Int) -> Unit,
+    viewModel: DetalleCuentaViewModel = hiltViewModel(),
     onVerTodos: () -> Unit,
-    // Callbacks para el diálogo de transacciones (reutilizamos la lógica de navegación)
-    onEditarTransaccion: (Int, String?) -> Unit
+    onEditarTransaccion: (Int, String) -> Unit
 ) {
+    // Inicializamos el ViewModel con el ID
+    LaunchedEffect(accountId) { viewModel.inicializar(accountId) }
+
     val state by viewModel.uiState.collectAsState()
+    var mostrarConfirmacionBorrar by remember { mutableStateOf(false) }
 
-    // Estados para diálogos
-    var mostrarConfirmacionBorrarCuenta by remember { mutableStateOf(false) }
-    var mostrarConfirmacionBorrarTransaccion by remember { mutableStateOf(false) }
+    val cuenta = state.cuenta
 
-    var transaccionSeleccionada by remember { mutableStateOf<TransaccionEntity?>(null) }
-    var mostrarDetalleTransaccion by remember { mutableStateOf(false) }
-
-    // --- COLORES ---
-    val backgroundColor = MaterialTheme.colorScheme.background
-    val cardColor = MaterialTheme.colorScheme.surfaceVariant
-    val textColor = MaterialTheme.colorScheme.onBackground
-    val subTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val primaryColor = MaterialTheme.colorScheme.primary
-    val errorColor = MaterialTheme.colorScheme.error
-
-    LaunchedEffect(state.cuenta) {
-        if (state.cuenta == null && accountId != -1) { /* onBack() */ }
-    }
-
-    // --- DIÁLOGOS ---
-
-    // 1. Borrar Cuenta
-    if (mostrarConfirmacionBorrarCuenta) {
+    if (mostrarConfirmacionBorrar) {
         AlertDialog(
-            onDismissRequest = { mostrarConfirmacionBorrarCuenta = false },
-            icon = { Icon(Icons.Default.Warning, null, tint = errorColor) },
-            title = { Text("¿Eliminar cuenta?") },
-            text = { Text("Se eliminarán también todos los movimientos de esta cuenta. Esta acción no se puede deshacer.") },
+            onDismissRequest = { mostrarConfirmacionBorrar = false },
+            title = { Text("¿Eliminar Cuenta?") },
+            text = { Text("Se borrarán todos los movimientos asociados. Esta acción no se puede deshacer.") },
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.borrarCuentaActual { onBack() }
-                        mostrarConfirmacionBorrarCuenta = false
+                        viewModel.borrarCuentaActual {
+                            mostrarConfirmacionBorrar = false
+                            onBack()
+                        }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = errorColor)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) { Text("Eliminar") }
             },
-            dismissButton = { TextButton(onClick = { mostrarConfirmacionBorrarCuenta = false }) { Text("Cancelar") } }
-        )
-    }
-
-    // 2. Detalle Transacción
-    if (mostrarDetalleTransaccion && transaccionSeleccionada != null) {
-        val t = transaccionSeleccionada!!
-
-        DetalleTransaccionDialog(
-            transaccion = t,
-            cuenta = state.cuenta, // Pasamos la cuenta actual
-            onDismiss = { mostrarDetalleTransaccion = false },
-            onDelete = { mostrarConfirmacionBorrarTransaccion = true },
-            onEdit = {
-                mostrarDetalleTransaccion = false
-                // Usamos el callback de navegación que pasaremos desde AppNavigation
-                // Si es transferencia, pasamos null como textoAudio
-                if (t.categoria == "Transferencia") {
-                    onEditarTransaccion(t.id, "TRANSFERENCIA")
-                } else {
-                    onEditarTransaccion(t.id, "GASTO_INGRESO")
-                }
-            }
-        )
-    }
-
-    // 3. Borrar Transacción
-    if (mostrarConfirmacionBorrarTransaccion && transaccionSeleccionada != null) {
-        AlertDialog(
-            onDismissRequest = { mostrarConfirmacionBorrarTransaccion = false },
-            icon = { Icon(Icons.Default.Warning, null, tint = errorColor) },
-            title = { Text("¿Eliminar movimiento?") },
-            text = { Text("Esta acción ajustará el saldo de tu cuenta.") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        // Necesitas un método en DetalleCuentaViewModel para borrar transacciones
-                        // Por ahora asumimos que existe o lo agregamos
-                        viewModel.borrarTransaccion(transaccionSeleccionada!!)
-                        mostrarConfirmacionBorrarTransaccion = false
-                        mostrarDetalleTransaccion = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = errorColor)
-                ) { Text("Eliminar") }
-            },
-            dismissButton = { TextButton(onClick = { mostrarConfirmacionBorrarTransaccion = false }) { Text("Cancelar") } }
+            dismissButton = { TextButton(onClick = { mostrarConfirmacionBorrar = false }) { Text("Cancelar") } }
         )
     }
 
     Scaffold(
-        containerColor = backgroundColor,
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (state.cuenta != null) {
-                            val colorCuenta = try { Color(android.graphics.Color.parseColor(state.cuenta!!.colorHex)) } catch(e:Exception){ primaryColor }
-                            val icono = IconoUtils.getIconoByName(state.cuenta!!.icono)
-                            Icon(imageVector = icono, contentDescription = null, tint = colorCuenta, modifier = Modifier.size(24.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(text = state.cuenta!!.nombre, color = textColor, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        } else {
-                            Text("Cargando...", color = textColor)
-                        }
-                    }
-                },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Atrás", tint = textColor) } },
+            TopAppBar(
+                title = { Text(cuenta?.nombre ?: "Detalle") },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, null) } },
                 actions = {
-                    IconButton(onClick = { state.cuenta?.let { onEditar(it.id) } }) { Icon(Icons.Default.Edit, "Editar", tint = textColor) }
-                    IconButton(onClick = { mostrarConfirmacionBorrarCuenta = true }) { Icon(Icons.Default.Delete, "Eliminar", tint = errorColor) }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = backgroundColor)
+                    IconButton(onClick = { onEditar(accountId) }) {
+                        Icon(Icons.Default.Edit, "Editar")
+                    }
+                    IconButton(onClick = { mostrarConfirmacionBorrar = true }) {
+                        Icon(Icons.Default.Delete, "Eliminar", tint = MaterialTheme.colorScheme.error)
+                    }
+                }
             )
         }
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier.padding(padding).fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp)
-        ) {
-            // SALDO
-            item {
-                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = cardColor)) {
-                    Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Saldo disponible", color = subTextColor, fontSize = 14.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(text = CurrencyUtils.formatCurrency(state.saldoActual), color = textColor, fontSize = 40.sp, fontWeight = FontWeight.Bold)
-                    }
+        if (cuenta != null) {
+            Column(modifier = Modifier.padding(padding).padding(16.dp)) {
+
+                // TARJETA DE RESUMEN
+                val cuentaUi = CuentaUiState(cuenta, state.saldoActual)
+                CardResumenDetalle(cuentaUi)
+
+                Spacer(Modifier.height(24.dp))
+
+                Button(
+                    onClick = onVerTodos,
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Ver Movimientos")
                 }
-            }
 
-            // MOVIMIENTOS
-            item {
-                Text("Últimos movimientos", color = textColor, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            val ultimosMovimientos = state.transacciones.take(5)
-            if (ultimosMovimientos.isEmpty()) {
-                item { Text("No hay movimientos aún.", color = subTextColor, modifier = Modifier.padding(vertical = 8.dp)) }
-            } else {
-                items(ultimosMovimientos) { transaccion ->
-                    ItemMovimientoCuentaClickable(
-                        t = transaccion,
-                        greenColor = primaryColor,
-                        redColor = errorColor,
-                        textColor = textColor,
-                        onClick = {
-                            transaccionSeleccionada = transaccion
-                            mostrarDetalleTransaccion = true
+                if (cuenta.esCredito) {
+                    Spacer(Modifier.height(16.dp))
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.3f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("Fechas de Corte y Pago", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.height(8.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Column {
+                                    Text("Día de Corte", style = MaterialTheme.typography.labelMedium)
+                                    Text(if(cuenta.diaCorte > 0) cuenta.diaCorte.toString() else "N/A", style = MaterialTheme.typography.titleMedium)
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text("Día de Pago", style = MaterialTheme.typography.labelMedium)
+                                    Text(if(cuenta.diaPago > 0) cuenta.diaPago.toString() else "N/A", style = MaterialTheme.typography.titleMedium)
+                                }
+                            }
                         }
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-            }
-
-            if (state.transacciones.size > 5) {
-                item {
-                    OutlinedButton(
-                        onClick = onVerTodos, // Ahora navega a la nueva lista
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = primaryColor)
-                    ) { Text("Ver todos los movimientos") }
+                    }
                 }
             }
         }
@@ -208,34 +118,100 @@ fun DetalleCuentaScreen(
 }
 
 @Composable
-fun ItemMovimientoCuentaClickable(
-    t: TransaccionEntity,
-    greenColor: Color,
-    redColor: Color,
-    textColor: Color,
-    onClick: () -> Unit // Nuevo parámetro
-) {
-    val icon = if(t.categoria == "Transferencia") Icons.Default.SwapHoriz else CategoriaUtils.getIcono(t.categoria)
-    val iconTint = if (t.esIngreso) greenColor else redColor
-    val bgIcon = iconTint.copy(alpha = 0.1f)
-    val signo = if (t.esIngreso) "+" else "-"
-    val colorMonto = if (t.esIngreso) greenColor else redColor
+fun CardResumenDetalle(item: CuentaUiState) {
+    val cuenta = item.cuenta
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick) // <--- Hacemos clickeable
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically
+    // Color seguro
+    val colorCuenta = try {
+        Color(android.graphics.Color.parseColor(cuenta.colorHex))
+    } catch (e: Exception) {
+        MaterialTheme.colorScheme.primary
+    }
+
+    // Icono
+    val iconoVector = IconoUtils.getIconoByName(cuenta.icono)
+
+    Card(
+        modifier = Modifier.fillMaxWidth().height(200.dp), // Un poco más alto para acomodar todo
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = colorCuenta)
     ) {
-        Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(bgIcon), contentAlignment = Alignment.Center) {
-            Icon(imageVector = icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(20.dp))
+        Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            // --- CABECERA: Nombre, Tipo e Icono ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column {
+                    Text(
+                        text = cuenta.nombre,
+                        color = Color.White,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    // Muestra el TIPO (Débito, Ahorro, Crédito, etc.)
+                    Text(
+                        text = cuenta.tipo.uppercase(),
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                // ICONO en la esquina superior derecha
+                Icon(
+                    imageVector = iconoVector,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.9f),
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+
+            // --- SALDOS ---
+            if (cuenta.esCredito) {
+                val disponible = item.saldoActual
+                val deuda = cuenta.limiteCredito - disponible
+
+                Column {
+                    // CAMBIO SOLICITADO: Texto "Saldo Total" en lugar de "Disponible para gastar"
+                    Text("Saldo Total", color = Color.White.copy(alpha = 0.9f), fontSize = 13.sp)
+                    Text(CurrencyUtils.formatCurrency(disponible), color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.Bold)
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Límite: ${CurrencyUtils.formatCurrency(cuenta.limiteCredito)}", color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
+
+                    // Deuda con fondo blanco y texto rojo
+                    Surface(
+                        color = Color.White,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.padding(start = 8.dp)
+                    ) {
+                        Text(
+                            text = " Deuda: ${CurrencyUtils.formatCurrency(deuda)} ",
+                            color = Color(0xFFD32F2F),
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+
+            } else {
+                // --- DÉBITO / AHORRO ---
+                Column {
+                    Text("Saldo Total", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
+                    Text(CurrencyUtils.formatCurrency(item.saldoActual), color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Bold)
+                }
+            }
         }
-        Spacer(modifier = Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = t.notaResumen.ifEmpty { t.categoria }, color = textColor, fontWeight = FontWeight.Medium, fontSize = 16.sp)
-        }
-        Text(text = "$signo${CurrencyUtils.formatCurrency(t.monto)}", color = colorMonto, fontWeight = FontWeight.Bold, fontSize = 16.sp)
     }
 }

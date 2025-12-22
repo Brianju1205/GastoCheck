@@ -19,7 +19,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.gastocheck.ui.theme.screens.home.CuentaUiState
 import com.example.gastocheck.ui.theme.screens.home.HomeViewModel
@@ -33,7 +32,6 @@ fun CuentasListaScreen(
     onNavegarDetalle: (Int) -> Unit,
     onNavegarCrear: () -> Unit
 ) {
-    // Usamos el nuevo estado con saldo calculado
     val cuentasState by viewModel.cuentasConSaldo.collectAsState()
 
     Scaffold(
@@ -48,9 +46,10 @@ fun CuentasListaScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onNavegarCrear,
-                containerColor = MaterialTheme.colorScheme.primary
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Crear Cuenta")
+                Icon(Icons.Default.Add, contentDescription = "Nueva Cuenta")
             }
         }
     ) { padding ->
@@ -62,24 +61,23 @@ fun CuentasListaScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(cuentasState) { item ->
-                ItemCuentaConSaldo(item, onClick = { onNavegarDetalle(item.cuenta.id) })
+                ItemCuentaSimple(item, onClick = { onNavegarDetalle(item.cuenta.id) })
             }
         }
     }
 }
 
 @Composable
-fun ItemCuentaConSaldo(item: CuentaUiState, onClick: () -> Unit) {
+fun ItemCuentaSimple(item: CuentaUiState, onClick: () -> Unit) {
     val cuenta = item.cuenta
 
-    // Convertir Hex String a Color
+    // Color seguro
     val colorCuenta = try {
         Color(android.graphics.Color.parseColor(cuenta.colorHex))
     } catch (e: Exception) {
         MaterialTheme.colorScheme.primary
     }
 
-    // Obtener Icono
     val iconoVector = IconoUtils.getIconoByName(cuenta.icono)
 
     Card(
@@ -95,7 +93,7 @@ fun ItemCuentaConSaldo(item: CuentaUiState, onClick: () -> Unit) {
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // ICONO COLOREADO
+            // --- ICONO ---
             Box(
                 modifier = Modifier
                     .size(48.dp)
@@ -113,7 +111,7 @@ fun ItemCuentaConSaldo(item: CuentaUiState, onClick: () -> Unit) {
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            // TEXTOS
+            // --- INFORMACIÓN ---
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = cuenta.nombre,
@@ -122,12 +120,20 @@ fun ItemCuentaConSaldo(item: CuentaUiState, onClick: () -> Unit) {
                 )
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // SALDO REAL
+                // LÓGICA DE ETIQUETA:
+                // Crédito -> "Disponible" (Es lo que calculamos como saldoActual)
+                // Débito -> "Saldo Total"
+                val etiqueta = if (cuenta.esCredito) "Disponible" else "Saldo Total"
+
+                // COLOR:
+                // Verde (Primary) si es positivo, Rojo (Error) si es negativo.
+                val colorSaldo = if (item.saldoActual >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+
                 Text(
-                    text = CurrencyUtils.formatCurrency(item.saldoActual),
+                    text = "$etiqueta: ${CurrencyUtils.formatCurrency(item.saldoActual)}",
                     style = MaterialTheme.typography.bodyLarge,
-                    color = if (item.saldoActual >= 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error,
-                    fontWeight = FontWeight.Medium
+                    color = colorSaldo,
+                    fontWeight = FontWeight.Bold
                 )
             }
 

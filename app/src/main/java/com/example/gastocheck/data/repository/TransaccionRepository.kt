@@ -20,7 +20,7 @@ interface TransaccionRepository {
     suspend fun getTransaccionPareja(transaccion: TransaccionEntity): TransaccionEntity?
 
     suspend fun insertTransaccion(transaccion: TransaccionEntity)
-    suspend fun insertCuenta(cuenta: CuentaEntity)
+    suspend fun insertCuenta(cuenta: CuentaEntity): Long
     suspend fun deleteTransaccion(transaccion: TransaccionEntity)
 
     // --- NUEVO: Borrar cuenta ---

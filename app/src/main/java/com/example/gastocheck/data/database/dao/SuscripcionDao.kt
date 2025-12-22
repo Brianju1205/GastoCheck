@@ -12,6 +12,8 @@ interface SuscripcionDao {
     // IMPORTANTE: Debe devolver Long para obtener el ID recién creado
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSuscripcion(suscripcion: SuscripcionEntity): Long
+    @Query("SELECT * FROM suscripciones WHERE id = :id")
+    suspend fun getSuscripcionById(id: Int): SuscripcionEntity?
 
     @Delete
     suspend fun deleteSuscripcion(suscripcion: SuscripcionEntity)
