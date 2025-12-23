@@ -86,7 +86,7 @@ fun AppNavigation() {
                     // 4. SUSCRIPCIONES
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.EventRepeat, null) },
-                        label = { Text("Suscr.") },
+                        label = { Text("Pagos") },
                         selected = currentRoute == "suscripciones",
                         onClick = {
                             navController.navigate("suscripciones") {

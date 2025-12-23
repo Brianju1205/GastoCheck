@@ -82,7 +82,7 @@ fun SuscripcionesScreen(viewModel: SuscripcionesViewModel = hiltViewModel()) {
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("Suscripciones", fontWeight = FontWeight.Bold) },
+                title = { Text("Pagos Recurrentes", fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
                     titleContentColor = MaterialTheme.colorScheme.onBackground

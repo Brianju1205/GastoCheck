@@ -67,9 +67,13 @@ class HomeViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val metas: StateFlow<List<MetaEntity>> = metaDao.getMetas()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
+    // Usamos .getMetasActivas() en lugar de .getMetas()
+    val metas: StateFlow<List<MetaEntity>> = metaDao.getMetasActivas()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
     private val transaccionesBase: Flow<List<TransaccionEntity>> = _cuentaSeleccionadaId
         .flatMapLatest { id ->
             if (id == -1) repository.getTransaccionesGlobales()

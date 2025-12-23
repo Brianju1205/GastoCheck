@@ -11,10 +11,16 @@ data class MetaEntity(
     val montoObjetivo: Double,
     val montoAhorrado: Double,
 
-    // --- NUEVOS CAMPOS PARA EL DISEÑO COMPLETO ---
-    val icono: String = "Savings",       // Nombre del icono (ej. "Savings", "Car")
-    val colorHex: String = "#00E676",    // Guardamos el color (Verde neón por defecto)
-    val fechaLimite: Long? = null,       // Guardamos la fecha en milisegundos (Long)
-    val cuentaId: Int = -1,              // ID de la cuenta donde se guarda el dinero
-    val nota: String = ""                // Notas opcionales
+    // --- CAMPOS DE DISEÑO Y DETALLE ---
+    val icono: String = "Savings",
+    val colorHex: String = "#00E676",
+    val fechaLimite: Long? = null,
+    val cuentaId: Int = -1,
+    val nota: String = "",
+
+    // --- CAMPO PARA REORDENAR (Funcionalidad de subir/bajar prioridad) ---
+    val orden: Int = 0,
+
+    // --- CAMPO PARA BORRADO LÓGICO (Recomendado para no perder historial) ---
+    val esArchivada: Boolean = false
 )

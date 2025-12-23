@@ -28,7 +28,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -49,11 +48,9 @@ import com.example.gastocheck.ui.theme.screens.agregar.AgregarViewModel.EstadoVo
 import com.example.gastocheck.ui.theme.util.CategoriaUtils
 import com.example.gastocheck.ui.theme.util.CurrencyUtils
 import com.example.gastocheck.ui.theme.util.DateUtils
-// IMPORTANTE: Importamos nuestros utils centralizados
 import com.example.gastocheck.ui.theme.util.IconoUtils
 import com.example.gastocheck.ui.theme.util.ServiceColorUtils
 import kotlinx.coroutines.launch
-import java.util.Date
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
 import androidx.compose.ui.window.DialogProperties
@@ -204,7 +201,7 @@ fun HomeScreen(
                             Icon(
                                 imageVector = Icons.Default.Settings,
                                 contentDescription = "Ajustes",
-                                tint = MaterialTheme.colorScheme.onBackground // O primary si prefieres color
+                                tint = MaterialTheme.colorScheme.onBackground
                             )
                         }
                     }
@@ -281,7 +278,8 @@ fun HomeScreen(
                                     nombre = m.nombre,
                                     ahorrado = m.montoAhorrado,
                                     meta = m.montoObjetivo,
-                                    iconoNombre = m.icono
+                                    iconoNombre = m.icono,
+                                    colorHex = m.colorHex // <--- AQUÍ PASAMOS EL COLOR DE LA META
                                 )
                             }
                         }
@@ -292,35 +290,26 @@ fun HomeScreen(
                             .filter { !(it.categoria == "Transferencia" && it.esIngreso) }
                             .sortedByDescending { it.fecha }
 
-                        // 2. Decidimos cuántos mostrar
                         val movimientosVisibles = if (mostrarTodosMovimientos) {
                             todosLosMovimientos
                         } else {
-                            todosLosMovimientos.take(10) // Límite inicial de 10
+                            todosLosMovimientos.take(10)
                         }
 
-                        // 3. Agrupamos por fecha (Lógica clave)
                         val agrupadoInicio = movimientosVisibles.groupBy { DateUtils.formatearFechaAmigable(it.fecha) }
 
-                        // 4. Renderizamos los grupos
                         agrupadoInicio.forEach { (fechaStr, movimientos) ->
-                            // Cabecera de fecha
                             item {
                                 Text(
                                     text = fechaStr,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier
-                                        .padding(vertical = 8.dp)
-                                        .fillMaxWidth(),
+                                    modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth(),
                                     textAlign = TextAlign.Center
                                 )
                             }
-
-                            // Items del grupo
                             items(movimientos) { t ->
                                 val cuenta = cuentas.find { it.id == t.cuentaId }
-
                                 if (t.categoria == "Transferencia") {
                                     ItemTransferencia(
                                         transaccion = t,
@@ -341,7 +330,6 @@ fun HomeScreen(
                             }
                         }
 
-                        // 5. Botón "Mostrar Todos" / "Mostrar Menos"
                         if (todosLosMovimientos.size > 10) {
                             item {
                                 Box(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), contentAlignment = Alignment.Center) {
@@ -428,7 +416,6 @@ fun HomeScreen(
                             item { Text(f, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth(), textAlign = TextAlign.Center) }
                             items(ts) { t ->
                                 val cuenta = cuentas.find { it.id == t.cuentaId }
-                                val nombreCuenta = cuenta?.nombre ?: "Cuenta"
                                 if (page == 3) {
                                     ItemTransferencia(
                                         transaccion = t,
@@ -714,12 +701,24 @@ fun DialogoEscuchandoAnimado(onDismiss: () -> Unit) {
 }
 
 // --- TARJETA DE PROGRESO MEJORADA ---
-@Composable
-fun CardProgresoAhorro(nombre: String, ahorrado: Double, meta: Double, iconoNombre: String) {
-    val progreso = if (meta > 0) (ahorrado / meta).toFloat().coerceIn(0f, 1f) else 0f
-    val colorNeon = Color(0xFF00E676)
 
-    // CAMBIO IMPORTANTE: Usamos la utilidad centralizada para soportar todos los iconos (carro, casa, etc.)
+@Composable
+fun CardProgresoAhorro(
+    nombre: String,
+    ahorrado: Double,
+    meta: Double,
+    iconoNombre: String,
+    colorHex: String // <--- NUEVO PARÁMETRO
+) {
+    val progreso = if (meta > 0) (ahorrado / meta).toFloat().coerceIn(0f, 1f) else 0f
+
+    // Convertimos el string Hex a Color. Si falla, usa verde por defecto.
+    val colorMeta = try {
+        Color(android.graphics.Color.parseColor(colorHex))
+    } catch (e: Exception) {
+        Color(0xFF00E676) // Verde Neon por defecto
+    }
+
     val iconoVector = IconoUtils.getIconoByName(iconoNombre)
 
     Card(
@@ -736,13 +735,13 @@ fun CardProgresoAhorro(nombre: String, ahorrado: Double, meta: Double, iconoNomb
                     modifier = Modifier
                         .size(48.dp)
                         .clip(CircleShape)
-                        .background(colorNeon.copy(alpha = 0.15f)),
+                        .background(colorMeta.copy(alpha = 0.15f)), // Fondo suave del color
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = iconoVector,
                         contentDescription = null,
-                        tint = colorNeon,
+                        tint = colorMeta, // Icono pintado
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -759,14 +758,14 @@ fun CardProgresoAhorro(nombre: String, ahorrado: Double, meta: Double, iconoNomb
                     Text(
                         text = "${CurrencyUtils.formatCurrency(ahorrado)} / ${CurrencyUtils.formatCurrency(meta)}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = colorMeta // Texto del monto con color
                     )
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // BARRA DE PROGRESO PERSONALIZADA (Gruesa y redonda)
+            // BARRA DE PROGRESO
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -779,7 +778,7 @@ fun CardProgresoAhorro(nombre: String, ahorrado: Double, meta: Double, iconoNomb
                         .fillMaxWidth(progreso)
                         .fillMaxHeight()
                         .clip(RoundedCornerShape(50))
-                        .background(colorNeon)
+                        .background(colorMeta) // Barra rellena con color
                 )
             }
         }
