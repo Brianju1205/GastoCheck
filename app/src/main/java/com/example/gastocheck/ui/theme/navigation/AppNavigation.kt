@@ -24,7 +24,8 @@ import com.example.gastocheck.ui.theme.screens.home.HomeScreen
 import com.example.gastocheck.ui.theme.screens.metas.MetasScreen
 import com.example.gastocheck.ui.theme.screens.suscripciones.SuscripcionesScreen
 import com.example.gastocheck.ui.theme.screens.ajustes.AjustesScreen
-import com.example.gastocheck.ui.theme.screens.estadisticas.EstadisticasScreen // <--- IMPORTANTE
+import com.example.gastocheck.ui.theme.screens.estadisticas.EstadisticasScreen
+import com.example.gastocheck.ui.theme.screens.notificaciones.NotificacionesScreen
 import com.example.gastocheck.ui.theme.screens.transferencia.RegistrarTransferenciaScreen
 
 @RequiresApi(Build.VERSION_CODES.O)
@@ -36,15 +37,16 @@ fun AppNavigation() {
 
     val sharedAgregarViewModel: AgregarViewModel = hiltViewModel()
 
-    // AGREGAMOS "estadisticas" A LA LISTA DE RUTAS CON BARRA
     val rutasConBarra = listOf("home", "cuentas_lista", "metas", "suscripciones", "estadisticas")
     val showBars = currentRoute in rutasConBarra
 
     Scaffold(
         bottomBar = {
             if (showBars) {
-                NavigationBar {
-                    // 1. INICIO
+                // ✅ CORRECCIÓN AQUÍ: containerColor va entre paréntesis
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.background
+                ) {
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Home, null) },
                         label = { Text("Inicio") },
@@ -57,7 +59,6 @@ fun AppNavigation() {
                             }
                         }
                     )
-                    // 2. CUENTAS
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.AccountBalance, null) },
                         label = { Text("Cuentas") },
@@ -70,7 +71,6 @@ fun AppNavigation() {
                             }
                         }
                     )
-                    // 3. METAS
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Star, null) },
                         label = { Text("Metas") },
@@ -83,7 +83,6 @@ fun AppNavigation() {
                             }
                         }
                     )
-                    // 4. SUSCRIPCIONES
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.EventRepeat, null) },
                         label = { Text("Pagos") },
@@ -96,10 +95,9 @@ fun AppNavigation() {
                             }
                         }
                     )
-                    // 5. ESTADÍSTICAS (ABREVIADO A "Stats")
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.InsertChart, null) },
-                        label = { Text("Stats") }, // <--- CAMBIO AQUÍ
+                        label = { Text("Stats") },
                         selected = currentRoute == "estadisticas",
                         onClick = {
                             navController.navigate("estadisticas") {
@@ -125,6 +123,7 @@ fun AppNavigation() {
                     HomeScreen(
                         agregarViewModel = sharedAgregarViewModel,
                         onNavegarAjustes = { navController.navigate("ajustes") },
+                        onNavegarNotificaciones = { navController.navigate("notificaciones") },
                         onNavegarAgregar = { esIngreso -> navController.navigate("agregar?id=-1&esIngreso=$esIngreso&vieneDeVoz=false") },
                         onNavegarEditar = { id -> navController.navigate("agregar?id=$id&vieneDeVoz=false") },
                         onNavegarMetas = { navController.navigate("metas") },
@@ -138,32 +137,31 @@ fun AppNavigation() {
                 }
             }
 
-            // --- ESTADISTICAS (NUEVA PANTALLA) ---
+            // --- NOTIFICACIONES ---
+            composable("notificaciones") {
+                NotificacionesScreen(navController = navController)
+            }
+
             composable("estadisticas") {
                 Box(modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding())) {
                     EstadisticasScreen()
                 }
             }
 
-            // --- SUSCRIPCIONES ---
             composable("suscripciones") {
                 Box(modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding())) {
                     SuscripcionesScreen()
                 }
             }
 
-            // --- METAS ---
             composable("metas") {
                 Box(modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding())) {
                     MetasScreen()
                 }
             }
 
-            // --- CUENTAS ---
             composable("cuentas_lista") {
                 Box(modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding())) {
-
-                    // CORRECCIÓN: Llamamos a CuentasListaScreen
                     CuentasListaScreen(
                         onNavegarDetalle = { navController.navigate("detalle_cuenta/$it") },
                         onNavegarCrear = { navController.navigate("crear_cuenta?id=-1") }
@@ -171,12 +169,9 @@ fun AppNavigation() {
                 }
             }
 
-            // --- AJUSTES ---
             composable("ajustes") {
                 AjustesScreen(onBack = { navController.popBackStack() })
             }
-
-            // --- PANTALLAS SECUNDARIAS ---
 
             composable("crear_cuenta?id={id}", arguments = listOf(navArgument("id") { type = NavType.IntType; defaultValue = -1 })) {
                 val id = it.arguments?.getInt("id") ?: -1

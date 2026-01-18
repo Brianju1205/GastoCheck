@@ -9,4 +9,6 @@ interface SuscripcionRepository {
     suspend fun insertSuscripcion(suscripcion: SuscripcionEntity): Long
     suspend fun updateSuscripcion(suscripcion: SuscripcionEntity)
     suspend fun deleteSuscripcion(suscripcion: SuscripcionEntity)
+
+    suspend fun eliminarRecordatoriosDeCuenta(cuentaId: Int)
 }

@@ -10,9 +10,12 @@ import com.example.gastocheck.data.database.dao.BalanceSnapshotDao
 import com.example.gastocheck.data.database.dao.CuentaDao
 import com.example.gastocheck.data.database.dao.HistorialPagoDao
 import com.example.gastocheck.data.database.dao.MetaDao
+import com.example.gastocheck.data.database.dao.NotificacionDao
 import com.example.gastocheck.data.database.dao.SuscripcionDao
 import com.example.gastocheck.data.database.dao.TransaccionDao
 import com.example.gastocheck.data.gemini.GeminiRepository
+import com.example.gastocheck.data.repository.CuentaRepository
+import com.example.gastocheck.data.repository.CuentaRepositoryImpl
 import com.example.gastocheck.data.repository.SuscripcionRepository
 import com.example.gastocheck.data.repository.SuscripcionRepositoryImpl
 import com.example.gastocheck.data.repository.TransaccionRepository
@@ -171,5 +174,18 @@ object AppModule {
         suscripcionDao: SuscripcionDao // Hilt inyecta el DAO definido arriba
     ): SuscripcionRepository {
         return SuscripcionRepositoryImpl(suscripcionDao)
+    }
+
+    @Provides
+    @Singleton
+    fun provideCuentaRepository(
+        cuentaDao: CuentaDao
+    ): CuentaRepository {
+        return CuentaRepositoryImpl(cuentaDao)
+    }
+    @Provides
+    @Singleton
+    fun provideNotificacionDao(database: AppDatabase): NotificacionDao {
+        return database.notificacionDao()
     }
 }

@@ -22,5 +22,6 @@ data class MetaEntity(
     val orden: Int = 0,
 
     // --- CAMPO PARA BORRADO LÓGICO (Recomendado para no perder historial) ---
-    val esArchivada: Boolean = false
+    val esArchivada: Boolean = false,
+    val esPausada: Boolean = false
 )

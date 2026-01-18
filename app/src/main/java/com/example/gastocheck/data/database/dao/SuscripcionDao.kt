@@ -20,4 +20,7 @@ interface SuscripcionDao {
 
     @Update
     suspend fun updateSuscripcion(suscripcion: SuscripcionEntity)
+
+    @Query("DELETE FROM suscripciones WHERE cuentaId = :cuentaId AND (nombre LIKE 'Corte:%' OR nombre LIKE 'Pagar:%')")
+    suspend fun eliminarRecordatoriosAutomaticos(cuentaId: Int)
 }

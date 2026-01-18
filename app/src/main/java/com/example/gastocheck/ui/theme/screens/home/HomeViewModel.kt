@@ -3,6 +3,7 @@ package com.example.gastocheck.ui.theme.screens.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gastocheck.data.database.dao.MetaDao
+import com.example.gastocheck.data.database.dao.NotificacionDao
 import com.example.gastocheck.data.database.entity.BalanceSnapshotEntity
 import com.example.gastocheck.data.database.entity.CuentaEntity
 import com.example.gastocheck.data.database.entity.MetaEntity
@@ -26,7 +27,8 @@ data class CuentaUiState(
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val repository: TransaccionRepository,
-    private val metaDao: MetaDao
+    private val metaDao: MetaDao,
+    private val notificacionDao: NotificacionDao
 ) : ViewModel() {
 
     private val _cuentaSeleccionadaId = MutableStateFlow(-1)
@@ -38,7 +40,9 @@ class HomeViewModel @Inject constructor(
     // Estado para guardar el rango personalizado (Inicio, Fin) en milisegundos
     private val _rangoFechas = MutableStateFlow<Pair<Long, Long>?>(null)
     val rangoFechas = _rangoFechas.asStateFlow()
-
+    val hayNotificacionesNoLeidas = notificacionDao.getConteoNoLeidas()
+        .map { it > 0 }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     // Lista simple de cuentas (Base de datos directa)
     val cuentas: StateFlow<List<CuentaEntity>> = repository.getCuentas()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

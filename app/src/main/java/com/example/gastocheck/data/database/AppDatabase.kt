@@ -3,24 +3,8 @@ package com.example.gastocheck.data.database
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
-// Imports de DAOs
-import com.example.gastocheck.data.database.dao.AbonoDao
-import com.example.gastocheck.data.database.dao.BalanceSnapshotDao
-import com.example.gastocheck.data.database.dao.CuentaDao
-import com.example.gastocheck.data.database.dao.HistorialPagoDao
-import com.example.gastocheck.data.database.dao.MetaDao
-import com.example.gastocheck.data.database.dao.SuscripcionDao // <--- Correcto
-import com.example.gastocheck.data.database.dao.TransaccionDao
-import com.example.gastocheck.data.database.dao.VozPendienteDao
-// Imports de Entidades
-import com.example.gastocheck.data.database.entity.AbonoEntity
-import com.example.gastocheck.data.database.entity.BalanceSnapshotEntity
-import com.example.gastocheck.data.database.entity.CuentaEntity
-import com.example.gastocheck.data.database.entity.MetaEntity
-import com.example.gastocheck.data.database.entity.SuscripcionEntity // <--- ESTE FALTABA
-import com.example.gastocheck.data.database.entity.HistorialPagoEntity
-import com.example.gastocheck.data.database.entity.TransaccionEntity
-import com.example.gastocheck.data.database.entity.VozPendienteEntity
+import com.example.gastocheck.data.database.dao.*
+import com.example.gastocheck.data.database.entity.*
 
 @Database(
     entities = [
@@ -32,12 +16,12 @@ import com.example.gastocheck.data.database.entity.VozPendienteEntity
         AbonoEntity::class,
         SuscripcionEntity::class,
         HistorialPagoEntity::class,
-
+        NotificacionEntity::class // <--- ¡AGREGA ESTA LÍNEA!
     ],
-    version = 16, // <--- Versión actualizada
+    version = 19, // <--- Sube la versión a 19 por si acaso (ya que hiciste cambios fallidos en la 18)
     exportSchema = false
 )
-@TypeConverters(Converters::class)
+@TypeConverters(Converters::class) // Asegúrate de que este converter exista, o usa DateConverter::class si es lo que usabas antes
 abstract class AppDatabase : RoomDatabase() {
     abstract fun transaccionDao(): TransaccionDao
     abstract fun metaDao(): MetaDao
@@ -45,8 +29,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun cuentaDao(): CuentaDao
     abstract fun balanceSnapshotDao(): BalanceSnapshotDao
     abstract fun abonoDao(): AbonoDao
-
-    // Nuevo DAO para suscripciones
     abstract fun suscripcionDao(): SuscripcionDao
     abstract fun historialPagoDao(): HistorialPagoDao
+    abstract fun notificacionDao(): NotificacionDao
 }

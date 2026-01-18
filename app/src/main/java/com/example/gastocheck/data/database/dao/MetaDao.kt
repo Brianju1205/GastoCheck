@@ -7,33 +7,36 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface MetaDao {
 
-    // --- CONSULTA PRINCIPAL ---
-    // 1. Filtramos "WHERE esArchivada = 0" (false) para no mostrar las borradas/completadas.
-    // 2. Ordenamos "ORDER BY orden ASC" para que la meta con orden 0 salga primero (Arriba).
+    // --- PARA LA PANTALLA DE METAS (Trae todo lo activo) ---
     @Query("SELECT * FROM metas WHERE esArchivada = 0 ORDER BY orden ASC")
     fun getMetasActivas(): Flow<List<MetaEntity>>
 
-    // --- INSERTAR ---
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertMeta(meta: MetaEntity): Long
+    // --- PARA EL HOME (REQUERIMIENTO 1) ---
+    // Busca la meta más importante (orden ASC) que NO esté completada y NO esté archivada.
+    // Así, si la primera de la lista ya se llenó, el Home mostrará la segunda.
+    @Query("""
+        SELECT * FROM metas 
+        WHERE esArchivada = 0 
+        AND montoAhorrado < montoObjetivo 
+        ORDER BY orden ASC 
+        LIMIT 1
+    """)
+    fun getMetaPrioritariaHome(): Flow<MetaEntity?>
 
-    // --- ACTUALIZAR UNO ---
-    // Sirve para editar nombre, monto, color, o abonar dinero.
-    @Update
-    suspend fun updateMeta(meta: MetaEntity)
-
-    // --- ACTUALIZAR VARIOS (NUEVO) ---
-    // CRUCIAL: Este método permite guardar la lista completa cuando cambias el orden
-    // (cuando pulsas las flechitas arriba/abajo).
+    // --- PARA GUARDAR EL REORDENAMIENTO ---
     @Update
     suspend fun updateMetas(metas: List<MetaEntity>)
 
-    // --- BORRAR ---
+    // ... (Tus otros inserts/updates) ...
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMeta(meta: MetaEntity): Long
+
+    @Update
+    suspend fun updateMeta(meta: MetaEntity)
+
     @Delete
     suspend fun deleteMeta(meta: MetaEntity)
 
-    // --- AUXILIAR PARA EL ORDEN ---
-    // Nos dice cuál es el número más alto para poner las nuevas metas al final de la lista.
     @Query("SELECT MAX(orden) FROM metas")
     suspend fun getMaxOrden(): Int?
 

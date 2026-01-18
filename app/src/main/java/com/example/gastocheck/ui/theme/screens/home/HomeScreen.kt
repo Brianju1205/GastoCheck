@@ -67,7 +67,8 @@ fun HomeScreen(
     onNavegarHistorial: (Int) -> Unit,
     onVozDetectada: (Boolean) -> Unit,
     onNavegarTransferencia: (Int, String?) -> Unit,
-    onNavegarAjustes: () -> Unit
+    onNavegarAjustes: () -> Unit,
+    onNavegarNotificaciones: () -> Unit
 ) {
     val saldoTotal by viewModel.saldoTotal.collectAsState()
     val historial by viewModel.historialSaldos.collectAsState()
@@ -197,6 +198,34 @@ fun HomeScreen(
                     ),
                     navigationIcon = { Icon(Icons.Default.AccountBalanceWallet, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 16.dp)) },
                     actions = {
+                        // --- AQUÍ AGREGAMOS EL BOTÓN DE NOTIFICACIONES ---
+                        IconButton(onClick = {
+                            // Navegar a la pantalla de notificaciones
+                            // Asumo que tienes una ruta "notificaciones" en tu NavHost
+                            onNavegarNotificaciones() // CORREGIR: Aquí deberías llamar a una lambda onNavegarNotificaciones()
+                        }) {
+                            // Badge para notificaciones no leídas (Lógica visual opcional)
+                            val hayNoLeidas by viewModel.hayNotificacionesNoLeidas.collectAsState(initial = false)
+
+                            Box {
+                                Icon(
+                                    imageVector = if (hayNoLeidas) Icons.Filled.NotificationsActive else Icons.Default.Notifications,
+                                    contentDescription = "Notificaciones",
+                                    tint = if (hayNoLeidas) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground
+                                )
+                                if (hayNoLeidas) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.Red)
+                                            .align(Alignment.TopEnd)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Botón de Ajustes (Existente)
                         IconButton(onClick = onNavegarAjustes) {
                             Icon(
                                 imageVector = Icons.Default.Settings,

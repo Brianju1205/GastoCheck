@@ -28,4 +28,7 @@ class SuscripcionRepositoryImpl @Inject constructor(
     override suspend fun deleteSuscripcion(suscripcion: SuscripcionEntity) {
         suscripcionDao.deleteSuscripcion(suscripcion)
     }
+    override suspend fun eliminarRecordatoriosDeCuenta(cuentaId: Int) {
+        suscripcionDao.eliminarRecordatoriosAutomaticos(cuentaId)
+    }
 }

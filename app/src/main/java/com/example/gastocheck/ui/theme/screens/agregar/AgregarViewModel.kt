@@ -9,6 +9,7 @@ import com.example.gastocheck.data.database.entity.CuentaEntity
 import com.example.gastocheck.data.database.entity.TransaccionEntity
 import com.example.gastocheck.data.gemini.GeminiRepository
 import com.example.gastocheck.data.ocr.OcrService
+import com.example.gastocheck.data.repository.CuentaRepository
 import com.example.gastocheck.data.repository.TransaccionRepository
 import com.example.gastocheck.ui.theme.util.CurrencyUtils
 import com.example.gastocheck.ui.theme.util.ImageUtils
@@ -26,12 +27,15 @@ import javax.inject.Inject
 class AgregarViewModel @Inject constructor(
     private val repository: TransaccionRepository,
     private val geminiRepository: GeminiRepository,
+    private val cuentaRepository: CuentaRepository,
     private val ocrService: OcrService,
+    // REFACTORIZACIÓN: Eliminado SuscripcionRepository.
+    // Las alertas de crédito ahora son manejadas por el CreditCardWorker.
     @ApplicationContext private val context: Context,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    // --- ESTADOS DE DATOS ---
+    // --- ESTADOS DE DATOS (Se mantienen igual) ---
     private val _monto = MutableStateFlow("")
     val monto = _monto.asStateFlow()
 
@@ -50,7 +54,6 @@ class AgregarViewModel @Inject constructor(
     private val _esMeta = MutableStateFlow(false)
     val esMeta = _esMeta.asStateFlow()
 
-    // --- NUEVO: ESTADO FOTOS (LISTA) ---
     private val _fotos = MutableStateFlow<List<String>>(emptyList())
     val fotos = _fotos.asStateFlow()
 
@@ -73,7 +76,7 @@ class AgregarViewModel @Inject constructor(
     sealed class EstadoVoz {
         object Inactivo : EstadoVoz()
         object Escuchando : EstadoVoz()
-        object ProcesandoIA : EstadoVoz() // Usado también para "Analizando Recibo"
+        object ProcesandoIA : EstadoVoz()
         data class Exito(val esIngreso: Boolean) : EstadoVoz()
         object Error : EstadoVoz()
     }
@@ -100,7 +103,7 @@ class AgregarViewModel @Inject constructor(
         _categoria.value = "Otros"
         _fecha.value = Date()
         _esMeta.value = false
-        _fotos.value = emptyList() // Limpiamos la lista de fotos
+        _fotos.value = emptyList()
     }
 
     private fun cargarTransaccion(id: Int) {
@@ -109,17 +112,12 @@ class AgregarViewModel @Inject constructor(
             val transaccion = repository.getTransaccionById(id)
             transaccion?.let {
                 _monto.value = it.monto.toString()
-
-                // Limpiamos la nota de detalles técnicos previos si existen
                 val notaLimpia = it.notaCompleta.substringBefore("\n(Conv:")
                 _descripcion.value = notaLimpia
-
                 _esIngreso.value = it.esIngreso
                 _categoria.value = it.categoria
                 _cuentaIdSeleccionada.value = it.cuentaId
                 _fecha.value = it.fecha
-
-                // Cargar lista de fotos
                 _fotos.value = it.fotos
             }
         }
@@ -136,11 +134,8 @@ class AgregarViewModel @Inject constructor(
     fun onFotoCapturada(uriString: String) {
         viewModelScope.launch {
             val uri = Uri.parse(uriString)
-            // 1. COPIAMOS la imagen al almacenamiento interno (para que sea persistente)
             val pathPermanente = ImageUtils.guardarImagenEnInterno(context, uri)
-
             if (pathPermanente != null) {
-                // 2. AÑADIMOS a la lista existente
                 val listaActual = _fotos.value.toMutableList()
                 listaActual.add(pathPermanente)
                 _fotos.value = listaActual
@@ -152,7 +147,6 @@ class AgregarViewModel @Inject constructor(
         val listaActual = _fotos.value.toMutableList()
         listaActual.remove(path)
         _fotos.value = listaActual
-        // Opcional: Podrías borrar el archivo físico aquí si quieres ahorrar espacio inmediatamente
     }
 
     fun onDescripcionChange(nuevoTexto: String) {
@@ -172,59 +166,43 @@ class AgregarViewModel @Inject constructor(
         }
     }
 
-    // --- LÓGICA ESCANEO DE RECIBOS (OCR + IA + SUMA) ---
+    // --- LÓGICA ESCANEO DE RECIBOS ---
     fun escanearRecibo(uri: Uri) {
         viewModelScope.launch {
-            // 1. Mostrar Loading
             _estadoVoz.value = EstadoVoz.ProcesandoIA
-
-            // 2. Guardar la foto del recibo
             onFotoCapturada(uri.toString())
 
             try {
-                // 3. Extraer texto con ML Kit
                 val textoCrudo = ocrService.procesarImagen(uri)
 
                 if (textoCrudo.isNotBlank()) {
-                    // 4. Analizar con Gemini/Groq
                     val datos = geminiRepository.analizarTextoRecibo(textoCrudo)
 
                     if (datos != null) {
-                        // 5. LÓGICA DE SUMA INTELIGENTE
                         val montoActual = _monto.value.toDoubleOrNull() ?: 0.0
                         val nuevoMonto = montoActual + datos.monto
                         _monto.value = nuevoMonto.toString()
 
-                        // Categoría: Solo actualizamos si no se ha elegido una específica aún
                         if (_categoria.value == "Otros") {
                             _categoria.value = datos.categoria
                         }
 
-                        // Nota: Acumulamos la descripción de productos
                         val notaActual = _descripcion.value
                         val nuevaNota = if (notaActual.isBlank()) datos.descripcion else "$notaActual + ${datos.descripcion}"
                         _descripcion.value = nuevaNota
 
-                        // Fecha: Priorizamos la fecha del recibo si es coherente
                         if (datos.fecha != null) {
                             _fecha.value = datos.fecha
                         }
-
-                        // --- CORRECCIÓN AQUÍ ---
-                        // ANTES: _estadoVoz.value = EstadoVoz.Exito(_esIngreso.value)
-                        // ESTO CAUSABA LA DOBLE PANTALLA
-
-                        // AHORA:
                         _estadoVoz.value = EstadoVoz.Inactivo
                     } else {
-                        // Falló la IA, pero dejamos la foto y ponemos el texto crudo en la nota
                         if (_descripcion.value.isBlank()) {
                             _descripcion.value = "Texto detectado: ${textoCrudo.take(100)}..."
                         }
                         _estadoVoz.value = EstadoVoz.Error
                     }
                 } else {
-                    _estadoVoz.value = EstadoVoz.Error // No se detectó texto en la imagen
+                    _estadoVoz.value = EstadoVoz.Error
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -320,7 +298,7 @@ class AgregarViewModel @Inject constructor(
         return mejorMonto
     }
 
-    // --- GUARDADO COMPLETO ---
+    // --- GUARDADO DE TRANSACCIÓN REFACTORIZADO ---
     fun guardarTransaccion(monedaOrigen: String, onGuardadoExitoso: () -> Unit) {
         val montoOriginal = _monto.value.toDoubleOrNull() ?: 0.0
 
@@ -328,10 +306,7 @@ class AgregarViewModel @Inject constructor(
             viewModelScope.launch {
                 var montoFinal = montoOriginal
 
-                // 1. Nota del Usuario (Limpia)
                 val notaUsuario = if (_descripcion.value.isBlank()) _categoria.value else _descripcion.value
-
-                // 2. Cálculo de Conversión
                 var detalleConversion = ""
                 if (monedaOrigen != "MXN") {
                     montoFinal = CurrencyUtils.convertirAMxn(montoOriginal, monedaOrigen)
@@ -339,26 +314,46 @@ class AgregarViewModel @Inject constructor(
                     val montoFinalStr = CurrencyUtils.formatCurrency(montoFinal)
                     detalleConversion = "\n(Conv: $montoOrigStr $monedaOrigen ≈ $montoFinalStr MXN)"
                 }
-
-                // 3. Generamos Resumen
                 val notaResumenGenerada = NotaUtils.generarResumen(notaUsuario, _categoria.value)
-
-                // 4. Generamos Nota Completa
                 val notaCompletaFinal = notaUsuario + detalleConversion
 
-                // 5. Creamos la entidad incluyendo la LISTA DE FOTOS
-                val t = TransaccionEntity(
-                    id = if (currentId == -1) 0 else currentId,
-                    monto = montoFinal,
-                    categoria = _categoria.value,
-                    notaCompleta = notaCompletaFinal,
-                    notaResumen = notaResumenGenerada,
-                    fecha = _fecha.value,
-                    esIngreso = _esIngreso.value,
-                    cuentaId = _cuentaIdSeleccionada.value,
-                    fotos = _fotos.value // <--- Guardamos la lista de rutas
-                )
-                repository.insertTransaccion(t)
+                // 1. OBTENER LA CUENTA ACTUAL
+                val cuenta = cuentaRepository.getCuentaById(_cuentaIdSeleccionada.value)
+
+                if (cuenta != null) {
+                    // 2. CALCULAR NUEVO SALDO
+                    // Esta lógica es fundamental. Aunque aquí no manejamos recordatorios,
+                    // el Worker de Crédito necesita leer el saldo actualizado para calcular la deuda.
+                    val nuevoSaldo = if (_esIngreso.value) {
+                        cuenta.saldoInicial + montoFinal
+                    } else {
+                        cuenta.saldoInicial - montoFinal
+                    }
+
+                    // 3. ACTUALIZAR CUENTA EN BD
+                    val cuentaActualizada = cuenta.copy(saldoInicial = nuevoSaldo)
+                    cuentaRepository.updateCuenta(cuentaActualizada)
+
+                    // 4. GUARDAR TRANSACCIÓN
+                    val t = TransaccionEntity(
+                        id = if (currentId == -1) 0 else currentId,
+                        monto = montoFinal,
+                        categoria = _categoria.value,
+                        notaCompleta = notaCompletaFinal,
+                        notaResumen = notaResumenGenerada,
+                        fecha = _fecha.value,
+                        esIngreso = _esIngreso.value,
+                        cuentaId = _cuentaIdSeleccionada.value,
+                        fotos = _fotos.value
+                    )
+                    repository.insertTransaccion(t)
+
+                    // REFACTORIZACIÓN COMPLETA:
+                    // Se ha eliminado el bloque que actualizaba recordatorios/suscripciones aquí.
+                    // La lógica ahora es desacoplada: El Worker leerá el nuevo saldo de la cuenta
+                    // en su próxima ejecución diaria y generará las alertas pertinentes.
+                }
+
                 limpiarFormulario()
                 onGuardadoExitoso()
             }

@@ -38,4 +38,6 @@ interface CuentaDao {
 
     @Delete
     suspend fun deleteCuenta(cuenta: CuentaEntity)
+    @Query("UPDATE cuentas SET saldoInicial = :nuevoSaldo WHERE id = :cuentaId")
+    suspend fun actualizarSaldo(cuentaId: Int, nuevoSaldo: Double)
 }
